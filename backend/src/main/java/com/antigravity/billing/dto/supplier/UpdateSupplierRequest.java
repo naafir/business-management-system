@@ -1,0 +1,36 @@
+package com.antigravity.billing.dto.supplier;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+public class UpdateSupplierRequest {
+    @NotBlank(message = "Supplier name is required")
+    @Size(max = 200, message = "Supplier name must not exceed 200 characters")
+    private String name;
+
+    @Size(max = 200, message = "Business name must not exceed 200 characters")
+    private String businessName;
+
+    private String phone;
+    private String email;
+    private String address;
+    private String city;
+
+    @NotBlank(message = "State name is required")
+    private String stateName;
+
+    @NotBlank(message = "State code is required")
+    @Pattern(regexp = "^[0-9]{2}$", message = "State code must be 2 digits (e.g. 27)")
+    private String stateCode;
+
+    @Pattern(regexp = "^$|^[1-9][0-9]{5}$", message = "PIN code must be 6 digits")
+    private String pinCode;
+
+    @Pattern(regexp = "^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$", message = "Invalid GSTIN format")
+    private String gstin;
+
+    private String notes;
+}
