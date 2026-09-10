@@ -1,0 +1,43 @@
+﻿# Environment files
+.env
+.env.local
+.env.*.local
+
+# Backups & Data
+backups/
+*.dump
+*.sql.gz
+*.bak
+
+# Database & local storage
+data/
+uploads/
+
+# Backend (Java / Maven)
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/*.log
+backend/.idea/
+backend/*.iml
+backend/.vscode/
+backend/.project
+backend/.classpath
+backend/.settings/
+
+# Frontend (Node / React / Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/.eslintcache
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
