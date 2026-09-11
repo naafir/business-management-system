@@ -7,6 +7,8 @@ import { ProductsPage } from './features/products/ProductsPage';
 import { CustomersPage } from './features/customers/CustomersPage';
 import { SuppliersPage } from './features/suppliers/SuppliersPage';
 import { InventoryPage } from './features/inventory/InventoryPage';
+import { PurchasesPage } from './features/purchases/PurchasesPage';
+import { SalesPage } from './features/sales/SalesPage';
 import { PlaceholderPage } from './components/PlaceholderPage';
 
 export function App() {
@@ -21,10 +23,8 @@ export function App() {
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
-        
-        {/* Upcoming Module Placeholders */}
-        <Route path="/sales" element={<PlaceholderPage title="Sales Management" description="Record customer sales transactions and link them to GST invoices." phase="Phase 4" />} />
-        <Route path="/purchases" element={<PlaceholderPage title="Purchase Management" description="Record vendor purchases, supplier bills, and input tax credits." phase="Phase 4" />} />
+        <Route path="/purchases" element={<PurchasesPage />} />
+        <Route path="/sales" element={<SalesPage />} />
         <Route path="/invoices" element={<PlaceholderPage title="Invoice & PDF Generator" description="Generate immutable GST-compliant tax invoices and server-side PDFs." phase="Phase 6" />} />
         <Route path="/payments" element={<PlaceholderPage title="Payment Records" description="Customer receipts, vendor payouts, UPI, and bank transfers." phase="Phase 7" />} />
         <Route path="/expenses" element={<PlaceholderPage title="Expense Tracking" description="Categorized operational expenses and GST input eligibility." phase="Phase 7" />} />

@@ -194,3 +194,234 @@ export interface StockAdjustmentRequest {
   notes?: string;
   unitCost?: number;
 }
+
+export type PaymentStatus = 'PENDING' | 'PARTIALLY_PAID' | 'PAID';
+export type PaymentMethod = 'CASH' | 'UPI' | 'BANK_TRANSFER' | 'CARD' | 'CHEQUE' | 'CREDIT';
+
+export interface PurchaseItem {
+  id: string;
+  productId: string;
+  productName: string;
+  productSku?: string;
+  hsnSac?: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  discountPercent: number;
+  discountAmount: number;
+  taxableAmount: number;
+  gstRatePercent: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalAmount: number;
+}
+
+export interface Purchase {
+  id: string;
+  purchaseNumber: string;
+  supplierId: string;
+  supplierName: string;
+  supplierGstin?: string;
+  supplierInvoiceNumber?: string;
+  purchaseDate: string;
+  subtotal: number;
+  taxableAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalTax: number;
+  totalDiscount: number;
+  grandTotal: number;
+  amountPaid: number;
+  balanceDue: number;
+  paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  items: PurchaseItem[];
+}
+
+export interface PurchaseItemRequest {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  discountPercent?: number;
+}
+
+export interface CreatePurchaseRequest {
+  supplierId: string;
+  supplierInvoiceNumber?: string;
+  purchaseDate: string;
+  items: PurchaseItemRequest[];
+  amountPaid?: number;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+}
+
+export interface PurchaseSummary {
+  totalPurchasesAmount: number;
+  totalOutstandingPayable: number;
+  totalPurchasesCount: number;
+  pendingPurchasesCount: number;
+}
+
+export interface SaleItem {
+  id: string;
+  productId: string;
+  productName: string;
+  productSku?: string;
+  hsnSac?: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  discountPercent: number;
+  discountAmount: number;
+  taxableAmount: number;
+  gstRatePercent: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalAmount: number;
+}
+
+export interface Sale {
+  id: string;
+  saleNumber: string;
+  customerId?: string;
+  customerName: string;
+  customerGstin?: string;
+  placeOfSupplyState: string;
+  placeOfSupplyCode: string;
+  saleDate: string;
+  subtotal: number;
+  taxableAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalTax: number;
+  totalDiscount: number;
+  grandTotal: number;
+  amountPaid: number;
+  balanceDue: number;
+  paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  items: SaleItem[];
+}
+
+export interface SaleItemRequest {
+  productId: string;
+  quantity: number;
+  unitPrice?: number;
+  discountPercent?: number;
+}
+
+export interface CreateSaleRequest {
+  customerId?: string;
+  customerName?: string;
+  customerGstin?: string;
+  placeOfSupplyState?: string;
+  placeOfSupplyCode?: string;
+  saleDate: string;
+  items: SaleItemRequest[];
+  amountPaid?: number;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+}
+
+export interface SaleSummary {
+  totalSalesAmount: number;
+  totalOutstandingReceivable: number;
+  totalSalesCount: number;
+  pendingSalesCount: number;
+}
+
+export type InvoiceStatus = 'DRAFT' | 'FINALIZED' | 'CANCELLED';
+
+export interface InvoiceItem {
+  id: string;
+  productId?: string;
+  productName: string;
+  productSku?: string;
+  hsnSac?: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  discountPercent: number;
+  discountAmount: number;
+  taxableAmount: number;
+  gstRatePercent: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalAmount: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  saleId?: string;
+  customerId?: string;
+  customerName: string;
+  customerGstin?: string;
+  placeOfSupplyState: string;
+  placeOfSupplyCode: string;
+  invoiceDate: string;
+  dueDate?: string;
+  status: InvoiceStatus;
+  subtotal: number;
+  taxableAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalTax: number;
+  totalDiscount: number;
+  grandTotal: number;
+  amountPaid: number;
+  balanceDue: number;
+  paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+  termsAndConditions?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  items: InvoiceItem[];
+}
+
+export interface InvoiceItemRequest {
+  productId: string;
+  quantity: number;
+  unitPrice?: number;
+  discountPercent?: number;
+}
+
+export interface CreateInvoiceRequest {
+  saleId?: string;
+  customerId?: string;
+  customerName?: string;
+  customerGstin?: string;
+  placeOfSupplyState?: string;
+  placeOfSupplyCode?: string;
+  invoiceDate: string;
+  dueDate?: string;
+  items: InvoiceItemRequest[];
+  amountPaid?: number;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+  termsAndConditions?: string;
+}
+
+export interface InvoiceSummary {
+  totalInvoicedAmount: number;
+  totalOutstandingReceivable: number;
+  totalInvoicesCount: number;
+  finalizedInvoicesCount: number;
+  draftInvoicesCount: number;
+}
