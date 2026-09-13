@@ -418,10 +418,129 @@ export interface CreateInvoiceRequest {
   termsAndConditions?: string;
 }
 
+
 export interface InvoiceSummary {
   totalInvoicedAmount: number;
   totalOutstandingReceivable: number;
   totalInvoicesCount: number;
   finalizedInvoicesCount: number;
   draftInvoicesCount: number;
+}
+
+// ─── Phase 7: Expenses ────────────────────────────────────────────────────────
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  description?: string;
+  active: boolean;
+}
+
+export interface Expense {
+  id: string;
+  categoryId?: string;
+  categoryName?: string;
+  expenseDate: string;
+  vendorName?: string;
+  description: string;
+  amount: number;
+  gstAmount: number;
+  totalAmount: number;
+  gstEligible: boolean;
+  paymentMethod?: PaymentMethod;
+  referenceNumber?: string;
+  notes?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateExpenseRequest {
+  categoryId?: string;
+  expenseDate: string;
+  vendorName?: string;
+  description: string;
+  amount: number;
+  gstAmount?: number;
+  gstEligible?: boolean;
+  paymentMethod?: PaymentMethod;
+  referenceNumber?: string;
+  notes?: string;
+}
+
+export interface ExpenseSummary {
+  totalExpensesAmount: number;
+  eligibleGstInputAmount: number;
+  totalExpensesCount: number;
+}
+
+// ─── Phase 8: Reports ─────────────────────────────────────────────────────────
+
+export interface GstOutputSummary {
+  totalRevenue: number;
+  totalTaxableValue: number;
+  totalCgstCollected: number;
+  totalSgstCollected: number;
+  totalIgstCollected: number;
+  totalTaxCollected: number;
+  b2bTaxableValue: number;
+  b2cTaxableValue: number;
+  totalInvoicesCount: number;
+}
+
+export interface GstInputSummary {
+  totalPurchaseValue: number;
+  totalTaxableValue: number;
+  totalCgstPaid: number;
+  totalSgstPaid: number;
+  totalIgstPaid: number;
+  totalInputTaxCredit: number;
+  totalPurchasesCount: number;
+}
+
+export interface HsnSummaryLine {
+  hsnSac: string;
+  totalQuantity: number;
+  totalTaxableValue: number;
+  totalCgst: number;
+  totalSgst: number;
+  totalIgst: number;
+  totalTax: number;
+  totalAmount: number;
+}
+
+export interface MonthlyTrend {
+  year: number;
+  month: number;
+  monthName: string;
+  salesAmount: number;
+  purchasesAmount: number;
+  expensesAmount: number;
+  salesCount: number;
+  purchasesCount: number;
+}
+
+export interface ProfitLoss {
+  totalRevenue: number;
+  totalCogs: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  totalExpenses: number;
+  netProfit: number;
+  totalTaxCollected: number;
+  totalInputTaxCredit: number;
+  netTaxLiability: number;
+}
+
+// ─── Phase 9: Audit Trail ─────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  userId?: string;
+  username?: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  details?: string;
+  createdAt: string;
 }

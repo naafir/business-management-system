@@ -6,7 +6,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { formatCurrency } from '../../lib/utils';
-import { Plus, Trash2, FileText, ShoppingBag, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, ShoppingBag, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface CreateInvoiceModalProps {
   isOpen: boolean;
@@ -32,8 +32,8 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
   const [customerId, setCustomerId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerGstin, setCustomerGstin] = useState('');
-  const [placeOfSupplyCode, setPlaceOfSupplyCode] = useState('27');
-  const [placeOfSupplyState, setPlaceOfSupplyState] = useState('Maharashtra');
+  const [placeOfSupplyCode] = useState('27');
+  const [placeOfSupplyState] = useState('Maharashtra');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
@@ -297,7 +297,14 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
                   </label>
                   <select
                     value={customerId}
-                    onChange={(e) => setCustomerId(e.target.value)}
+                    onChange={(e) => {
+                      setCustomerId(e.target.value);
+                      const c = customers.find(c => c.id === e.target.value);
+                      if (c) {
+                        setCustomerName(c.name);
+                        setCustomerGstin(c.gstin || '');
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   >
                     <option value="">-- Walk-in Customer --</option>
@@ -434,31 +441,52 @@ export function CreateInvoiceModal({ isOpen, onClose }: CreateInvoiceModalProps)
 
               {/* Totals & Submit */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200 dark:border-slate-700 pt-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="Optional invoice notes..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Payment Method
+                    </label>
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    >
+                      <option value="CASH">Cash</option>
+                      <option value="UPI">UPI / Digital Payout</option>
+                      <option value="BANK_TRANSFER">Bank Transfer (NEFT/RTGS)</option>
+                      <option value="CARD">Debit / Credit Card</option>
+                      <option value="CREDIT">Customer Credit</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Notes
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Optional invoice notes..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
                 </div>
 
-                <div className="bg-slate-50 dark:bg-slate-800/70 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
-                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                    <span>Taxable Value:</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(totals.taxable)}</span>
-                  </div>
-                  <div className="flex justify-between text-indigo-600 dark:text-indigo-400">
-                    <span>GST Amount:</span>
-                    <span className="font-semibold">{formatCurrency(totals.tax)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700 pt-2">
-                    <span>Grand Total:</span>
-                    <span className="text-indigo-600 dark:text-indigo-400">{formatCurrency(totals.grandTotal)}</span>
+                <div className="bg-slate-50 dark:bg-slate-800/70 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2 text-xs flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                      <span>Taxable Value:</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(totals.taxable)}</span>
+                    </div>
+                    <div className="flex justify-between text-indigo-600 dark:text-indigo-400">
+                      <span>GST Amount:</span>
+                      <span className="font-semibold">{formatCurrency(totals.tax)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold text-slate-900 dark:text-white border-t border-slate-200 dark:border-slate-700 pt-2">
+                      <span>Grand Total:</span>
+                      <span className="text-indigo-600 dark:text-indigo-400">{formatCurrency(totals.grandTotal)}</span>
+                    </div>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-3">

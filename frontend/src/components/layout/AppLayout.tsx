@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
-import { useAuth } from '../../features/auth/AuthContext';
+import { useAuth } from '../../features/auth/useAuth';
+
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);

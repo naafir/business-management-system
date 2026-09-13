@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,5 +45,31 @@ public interface PurchaseRepository extends JpaRepository<Purchase, UUID> {
     @Query("SELECT COALESCE(SUM(p.balanceDue), 0) FROM Purchase p")
     BigDecimal sumTotalOutstandingBalance();
 
+    // Report queries
+    @Query("SELECT COALESCE(SUM(p.grandTotal), 0) FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
+    BigDecimal sumPurchasesByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(p.taxableAmount), 0) FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
+    BigDecimal sumPurchaseTaxableByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(p.cgstAmount), 0) FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
+    BigDecimal sumPurchaseCgstByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(p.sgstAmount), 0) FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
+    BigDecimal sumPurchaseSgstByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(p.igstAmount), 0) FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
+    BigDecimal sumPurchaseIgstByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COUNT(p) FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
+    long countByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // Monthly trend
+    @Query("SELECT YEAR(p.purchaseDate), MONTH(p.purchaseDate), COALESCE(SUM(p.grandTotal),0), COUNT(p) " +
+           "FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate " +
+           "GROUP BY YEAR(p.purchaseDate), MONTH(p.purchaseDate) ORDER BY YEAR(p.purchaseDate), MONTH(p.purchaseDate)")
+    List<Object[]> monthlyPurchasesTrend(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
     long count();
 }
+

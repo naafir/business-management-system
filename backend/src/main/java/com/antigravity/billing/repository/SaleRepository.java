@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,6 +44,43 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
 
     @Query("SELECT COALESCE(SUM(s.balanceDue), 0) FROM Sale s")
     BigDecimal sumTotalReceivableBalance();
+
+    // Report queries
+    @Query("SELECT COALESCE(SUM(s.grandTotal), 0) FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    BigDecimal sumRevenueByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(s.taxableAmount), 0) FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    BigDecimal sumTaxableValueByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(s.cgstAmount), 0) FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    BigDecimal sumCgstByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(s.sgstAmount), 0) FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    BigDecimal sumSgstByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(s.igstAmount), 0) FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    BigDecimal sumIgstByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COALESCE(SUM(s.taxableAmount), 0) FROM Sale s WHERE s.customerGstin IS NOT NULL AND s.customerGstin <> '' AND s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    BigDecimal sumB2bTaxableValueByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT COUNT(s) FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    long countByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // Monthly trend
+    @Query("SELECT YEAR(s.saleDate), MONTH(s.saleDate), COALESCE(SUM(s.grandTotal),0), COUNT(s) " +
+           "FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate " +
+           "GROUP BY YEAR(s.saleDate), MONTH(s.saleDate) ORDER BY YEAR(s.saleDate), MONTH(s.saleDate)")
+    List<Object[]> monthlySalesTrend(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // HSN summary
+    @Query("SELECT si.hsnSac, COALESCE(SUM(si.quantity),0), COALESCE(SUM(si.taxableAmount),0), " +
+           "COALESCE(SUM(si.cgstAmount),0), COALESCE(SUM(si.sgstAmount),0), COALESCE(SUM(si.igstAmount),0), " +
+           "COALESCE(SUM(si.totalAmount),0) " +
+           "FROM SaleItem si JOIN si.sale s " +
+           "WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate " +
+           "GROUP BY si.hsnSac ORDER BY si.hsnSac")
+    List<Object[]> hsnSummaryByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     long count();
 }

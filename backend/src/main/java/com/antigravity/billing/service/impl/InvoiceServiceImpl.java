@@ -154,12 +154,16 @@ public class InvoiceServiceImpl implements InvoiceService {
             BigDecimal grossAmount = unitPrice.multiply(itemReq.getQuantity()).setScale(2, RoundingMode.HALF_UP);
             BigDecimal discountAmount = grossAmount.multiply(discountPercent).divide(new BigDecimal("100.00"), 2, RoundingMode.HALF_UP);
 
+            BigDecimal gstRate = (product.getGstRate() != null && product.getGstRate().getRatePercent() != null)
+                    ? product.getGstRate().getRatePercent()
+                    : BigDecimal.ZERO;
+
             gstItems.add(GstCalculationRequest.GstLineItemInput.builder()
                     .description(product.getName())
                     .quantity(itemReq.getQuantity())
                     .unitPrice(unitPrice)
                     .discount(discountAmount)
-                    .gstRatePercent(product.getGstRatePercent() != null ? product.getGstRatePercent() : BigDecimal.ZERO)
+                    .gstRatePercent(gstRate)
                     .build());
 
             tempDataList.add(new TempItemData(product, unitPrice, discountPercent, discountAmount));

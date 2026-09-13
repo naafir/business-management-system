@@ -40,17 +40,20 @@ class ApiService {
       throw new Error('Session expired. Please log in again.');
     }
 
-    const data = await response.json();
+    // Safely parse body — handles 204 No Content and empty responses
+    const text = await response.text();
+    const data = text.trim() ? JSON.parse(text) : null;
 
     if (!response.ok) {
       const errorData = data as ApiError;
-      const error = new Error(errorData.message || 'An unexpected error occurred') as any;
+      const error = new Error(errorData?.message || 'An unexpected error occurred') as any;
       error.status = response.status;
-      error.fieldErrors = errorData.fieldErrors;
+      error.fieldErrors = errorData?.fieldErrors;
       throw error;
     }
 
-    return (data as ApiResponse<T>).data;
+    return data ? (data as ApiResponse<T>).data : (null as T);
+
   }
 
   public get<T>(endpoint: string): Promise<T> {

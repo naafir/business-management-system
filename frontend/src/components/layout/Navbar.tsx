@@ -1,6 +1,7 @@
 import { Menu, Moon, Sun, LogOut, Shield } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
-import { useAuth } from '../../features/auth/AuthContext';
+import { useAuth } from '../../features/auth/useAuth';
+
 
 interface NavbarProps {
   onOpenSidebar: () => void;

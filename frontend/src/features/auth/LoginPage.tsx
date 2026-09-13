@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from './AuthContext';
+import { useAuth } from './useAuth';
+
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Building2, ShieldCheck, Lock, User, AlertCircle } from 'lucide-react';
