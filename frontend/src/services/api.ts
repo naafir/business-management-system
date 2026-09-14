@@ -40,9 +40,16 @@ class ApiService {
       throw new Error('Session expired. Please log in again.');
     }
 
-    // Safely parse body — handles 204 No Content and empty responses
+    // Safely parse body — handles non-JSON, 204 No Content, and empty responses
     const text = await response.text();
-    const data = text.trim() ? JSON.parse(text) : null;
+    let data: any = null;
+    if (text.trim()) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { message: text };
+      }
+    }
 
     if (!response.ok) {
       const errorData = data as ApiError;
