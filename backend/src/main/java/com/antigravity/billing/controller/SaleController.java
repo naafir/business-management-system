@@ -77,4 +77,19 @@ public class SaleController {
         );
         return new ResponseEntity<>(ApiResponse.ok("Sale recorded successfully", created), HttpStatus.CREATED);
     }
+
+    @PostMapping("/{id}/payment")
+    public ResponseEntity<ApiResponse<SaleResponseDto>> recordPayment(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody com.antigravity.billing.dto.payment.RecordPaymentRequest request
+    ) {
+        SaleResponseDto updated = saleService.recordPayment(
+                id,
+                request,
+                userDetails.getId(),
+                userDetails.getUsername()
+        );
+        return ResponseEntity.ok(ApiResponse.ok("Payment recorded successfully", updated));
+    }
 }

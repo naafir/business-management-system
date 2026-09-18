@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: billing-backend
   profiles:
@@ -17,6 +17,26 @@ server:
   port: 8080
   servlet:
     context-path: /
+  # Enable gzip compression for API responses — reduces payload ~60-70%
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain
+    min-response-size: 1024
+  shutdown: graceful
+  # Security headers
+  tomcat:
+    max-threads: 200
+    accept-count: 100
+
+# Management & Health Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
 
 # Security & JWT Configuration
 app:
@@ -29,3 +49,6 @@ app:
   storage:
     type: ${STORAGE_TYPE:LOCAL}
     local-dir: ${STORAGE_LOCAL_DIR:./uploads}
+  backup:
+    dir: ${BACKUP_DIR:./backups}
+

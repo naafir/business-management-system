@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   config:
     activate:
       on-profile: prod
@@ -8,9 +8,12 @@
     password: ${DB_PASSWORD:postgres_secure_password_change_in_prod}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
+      maximum-pool-size: 20
+      minimum-idle: 5
       idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
       pool-name: BillingHikariCP
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect

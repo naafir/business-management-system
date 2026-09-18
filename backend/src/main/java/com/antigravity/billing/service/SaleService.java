@@ -4,6 +4,7 @@ import com.antigravity.billing.dto.common.PageResponse;
 import com.antigravity.billing.dto.sale.CreateSaleRequest;
 import com.antigravity.billing.dto.sale.SaleResponseDto;
 import com.antigravity.billing.dto.sale.SaleSummaryDto;
+import com.antigravity.billing.dto.payment.RecordPaymentRequest;
 import com.antigravity.billing.entity.PaymentStatus;
 import org.springframework.data.domain.Pageable;
 
@@ -13,6 +14,8 @@ import java.util.UUID;
 public interface SaleService {
 
     SaleResponseDto createSale(CreateSaleRequest request, UUID userId, String username);
+
+    SaleResponseDto recordPayment(UUID id, RecordPaymentRequest request, UUID userId, String username);
 
     SaleResponseDto getSaleById(UUID id);
 

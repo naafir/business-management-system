@@ -14,7 +14,9 @@ import { ExpensesPage } from './features/expenses/ExpensesPage';
 import { GstReportPage } from './features/gst/GstReportPage';
 import { ReportsPage } from './features/reports/ReportsPage';
 import { AuditPage } from './features/audit/AuditPage';
-import { PlaceholderPage } from './components/PlaceholderPage';
+import { PaymentsPage } from './features/payments/PaymentsPage';
+import { DocumentsPage } from './features/documents/DocumentsPage';
+import { BackupsPage } from './features/backups/BackupsPage';
 
 export function App() {
   return (
@@ -33,14 +35,14 @@ export function App() {
         <Route path="/invoices" element={<InvoicesPage />} />
         {/* Phase 7 */}
         <Route path="/expenses" element={<ExpensesPage />} />
-        <Route path="/payments" element={<PlaceholderPage title="Payment Records" description="Customer receipts, vendor payouts, UPI, and bank transfers." phase="Phase 7" />} />
+        <Route path="/payments" element={<PaymentsPage />} />
         {/* Phase 8 */}
         <Route path="/gst" element={<GstReportPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         {/* Phase 9 */}
         <Route path="/audit" element={<AuditPage />} />
-        <Route path="/documents" element={<PlaceholderPage title="Document Storage" description="Secure attachment storage for receipts and vendor bills." phase="Phase 9" />} />
-        <Route path="/backups" element={<PlaceholderPage title="Backup & Restore" description="Encrypted database backups and automated integrity verification." phase="Phase 9" />} />
+        <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/backups" element={<BackupsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -20,3 +20,9 @@ logging:
   level:
     com.antigravity.billing: WARN
     org.springframework.security: WARN
+
+app:
+  security:
+    rate-limit:
+      enabled: false
+

@@ -14,6 +14,8 @@ public interface PurchaseService {
 
     PurchaseResponseDto createPurchase(CreatePurchaseRequest request, UUID userId, String username);
 
+    PurchaseResponseDto recordPayment(UUID id, com.antigravity.billing.dto.payment.RecordPaymentRequest request, UUID userId, String username);
+
     PurchaseResponseDto getPurchaseById(UUID id);
 
     PurchaseResponseDto getPurchaseByNumber(String purchaseNumber);

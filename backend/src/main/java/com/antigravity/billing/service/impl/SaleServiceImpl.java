@@ -247,6 +247,69 @@ public class SaleServiceImpl implements SaleService {
     }
 
     @Override
+    @Transactional
+    public SaleResponseDto recordPayment(UUID id, com.antigravity.billing.dto.payment.RecordPaymentRequest request, UUID userId, String username) {
+        Sale sale = saleRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Sale", "id", id));
+
+        BigDecimal paymentAmount = request.getAmountPaid().setScale(2, RoundingMode.HALF_UP);
+        if (paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ApiException("Payment amount must be greater than zero", HttpStatus.BAD_REQUEST);
+        }
+
+        BigDecimal currentBalance = sale.getBalanceDue();
+        if (paymentAmount.compareTo(currentBalance.add(new BigDecimal("0.01"))) > 0) {
+            throw new ApiException("Payment amount ₹" + paymentAmount + " exceeds balance due of ₹" + currentBalance, HttpStatus.BAD_REQUEST);
+        }
+
+        BigDecimal newAmountPaid = sale.getAmountPaid().add(paymentAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal newBalanceDue = sale.getGrandTotal().subtract(newAmountPaid).setScale(2, RoundingMode.HALF_UP);
+
+        if (newBalanceDue.compareTo(BigDecimal.ZERO) <= 0) {
+            newBalanceDue = BigDecimal.ZERO;
+            sale.setPaymentStatus(PaymentStatus.PAID);
+        } else {
+            sale.setPaymentStatus(PaymentStatus.PARTIALLY_PAID);
+        }
+
+        sale.setAmountPaid(newAmountPaid);
+        sale.setBalanceDue(newBalanceDue);
+        if (request.getPaymentMethod() != null) {
+            sale.setPaymentMethod(request.getPaymentMethod());
+        }
+
+        if (request.getNotes() != null && !request.getNotes().isBlank()) {
+            String existingNotes = sale.getNotes() != null ? sale.getNotes() + " | " : "";
+            sale.setNotes(existingNotes + "Payment: ₹" + paymentAmount + " (" + request.getPaymentMethod() + ") " + request.getNotes());
+        }
+
+        Sale updatedSale = saleRepository.save(sale);
+
+        // Update customer balance if linked
+        if (sale.getCustomer() != null) {
+            Customer customer = sale.getCustomer();
+            BigDecimal customerBal = customer.getOutstandingBalance() != null ? customer.getOutstandingBalance() : BigDecimal.ZERO;
+            BigDecimal newCustBal = customerBal.subtract(paymentAmount);
+            if (newCustBal.compareTo(BigDecimal.ZERO) < 0) {
+                newCustBal = BigDecimal.ZERO;
+            }
+            customer.setOutstandingBalance(newCustBal);
+            customerRepository.save(customer);
+        }
+
+        auditService.logAction(
+                userId,
+                username,
+                "RECORD_PAYMENT",
+                "SALE",
+                sale.getId().toString(),
+                "Recorded payment of ₹" + paymentAmount + " via " + request.getPaymentMethod() + " for Sale #" + sale.getSaleNumber() + ". Remaining balance: ₹" + newBalanceDue
+        );
+
+        return mapToDto(updatedSale);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public SaleResponseDto getSaleById(UUID id) {
         Sale sale = saleRepository.findById(id)

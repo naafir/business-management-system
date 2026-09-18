@@ -5,7 +5,9 @@ import com.antigravity.billing.dto.gst.GstCalculationRequest;
 import com.antigravity.billing.dto.gst.GstCalculationResult;
 import com.antigravity.billing.dto.purchase.*;
 import com.antigravity.billing.entity.*;
+import com.antigravity.billing.exception.ApiException;
 import com.antigravity.billing.exception.ResourceNotFoundException;
+import org.springframework.http.HttpStatus;
 import com.antigravity.billing.repository.BusinessSettingsRepository;
 import com.antigravity.billing.repository.ProductRepository;
 import com.antigravity.billing.repository.PurchaseRepository;
@@ -181,6 +183,69 @@ public class PurchaseServiceImpl implements PurchaseService {
         );
 
         return mapToDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public PurchaseResponseDto recordPayment(UUID id, com.antigravity.billing.dto.payment.RecordPaymentRequest request, UUID userId, String username) {
+        Purchase purchase = purchaseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Purchase", "id", id));
+
+        BigDecimal paymentAmount = request.getAmountPaid().setScale(2, RoundingMode.HALF_UP);
+        if (paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ApiException("Payment amount must be greater than zero", HttpStatus.BAD_REQUEST);
+        }
+
+        BigDecimal currentBalance = purchase.getBalanceDue();
+        if (paymentAmount.compareTo(currentBalance.add(new BigDecimal("0.01"))) > 0) {
+            throw new ApiException("Payment amount ₹" + paymentAmount + " exceeds balance due of ₹" + currentBalance, HttpStatus.BAD_REQUEST);
+        }
+
+        BigDecimal newAmountPaid = purchase.getAmountPaid().add(paymentAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal newBalanceDue = purchase.getGrandTotal().subtract(newAmountPaid).setScale(2, RoundingMode.HALF_UP);
+
+        if (newBalanceDue.compareTo(BigDecimal.ZERO) <= 0) {
+            newBalanceDue = BigDecimal.ZERO;
+            purchase.setPaymentStatus(PaymentStatus.PAID);
+        } else {
+            purchase.setPaymentStatus(PaymentStatus.PARTIALLY_PAID);
+        }
+
+        purchase.setAmountPaid(newAmountPaid);
+        purchase.setBalanceDue(newBalanceDue);
+        if (request.getPaymentMethod() != null) {
+            purchase.setPaymentMethod(request.getPaymentMethod());
+        }
+
+        if (request.getNotes() != null && !request.getNotes().isBlank()) {
+            String existingNotes = purchase.getNotes() != null ? purchase.getNotes() + " | " : "";
+            purchase.setNotes(existingNotes + "Payment: ₹" + paymentAmount + " (" + request.getPaymentMethod() + ") " + request.getNotes());
+        }
+
+        Purchase updatedPurchase = purchaseRepository.save(purchase);
+
+        // Update supplier outstanding balance
+        if (purchase.getSupplier() != null) {
+            Supplier supplier = purchase.getSupplier();
+            BigDecimal supplierBal = supplier.getOutstandingBalance() != null ? supplier.getOutstandingBalance() : BigDecimal.ZERO;
+            BigDecimal newSupBal = supplierBal.subtract(paymentAmount);
+            if (newSupBal.compareTo(BigDecimal.ZERO) < 0) {
+                newSupBal = BigDecimal.ZERO;
+            }
+            supplier.setOutstandingBalance(newSupBal);
+            supplierRepository.save(supplier);
+        }
+
+        auditService.logAction(
+                userId,
+                username,
+                "RECORD_PAYMENT",
+                "PURCHASE",
+                purchase.getId().toString(),
+                "Recorded payment of ₹" + paymentAmount + " via " + request.getPaymentMethod() + " for Purchase #" + purchase.getPurchaseNumber() + ". Remaining balance: ₹" + newBalanceDue
+        );
+
+        return mapToDto(updatedPurchase);
     }
 
     @Override

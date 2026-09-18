@@ -544,3 +544,28 @@ export interface AuditLogEntry {
   details?: string;
   createdAt: string;
 }
+
+// ─── Documents & Backup Types ────────────────────────────────────────────────
+
+export interface DocumentItem {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSizeBytes: number;
+  filePath: string;
+  entityType: string;
+  entityId?: string;
+  notes?: string;
+  uploadedBy?: string;
+  uploadedByName?: string;
+  createdAt: string;
+}
+
+export interface BackupItem {
+  fileName: string;
+  fileSizeBytes: number;
+  formattedSize: string;
+  createdAt: string;
+  checksumSha256?: string;
+  status: 'VERIFIED' | 'PENDING';
+}

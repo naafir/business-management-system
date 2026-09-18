@@ -6,6 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { CustomerModal } from './CustomerModal';
+import { CustomerLedgerModal } from './CustomerLedgerModal';
 import { formatCurrency } from '../../lib/utils';
 import {
   Users,
@@ -20,7 +21,8 @@ import {
   Mail,
   CreditCard,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  BookOpen,
 } from 'lucide-react';
 
 export function CustomersPage() {
@@ -33,6 +35,7 @@ export function CustomersPage() {
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
 
   // Fetch customers
   const { data: pageData, isLoading } = useQuery<PageResponse<Customer>>({
@@ -345,6 +348,13 @@ export function CustomersPage() {
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          onClick={() => setLedgerCustomer(customer)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          title="View Customer Ledger & Sales"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => {
                             setSelectedCustomer(customer);
                             setIsCustomerModalOpen(true);
@@ -419,6 +429,14 @@ export function CustomersPage() {
         onClose={() => setIsCustomerModalOpen(false)}
         customer={selectedCustomer}
       />
+
+      {/* Customer Ledger Modal */}
+      {ledgerCustomer && (
+        <CustomerLedgerModal
+          customer={ledgerCustomer}
+          onClose={() => setLedgerCustomer(null)}
+        />
+      )}
     </div>
   );
 }

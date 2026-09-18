@@ -6,6 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { SupplierModal } from './SupplierModal';
+import { SupplierLedgerModal } from './SupplierLedgerModal';
 import { formatCurrency } from '../../lib/utils';
 import {
   Truck,
@@ -19,7 +20,8 @@ import {
   Mail,
   CreditCard,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  BookOpen,
 } from 'lucide-react';
 
 export function SuppliersPage() {
@@ -31,6 +33,7 @@ export function SuppliersPage() {
 
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [ledgerSupplier, setLedgerSupplier] = useState<Supplier | null>(null);
 
   // Fetch suppliers
   const { data: pageData, isLoading } = useQuery<PageResponse<Supplier>>({
@@ -274,6 +277,13 @@ export function SuppliersPage() {
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          onClick={() => setLedgerSupplier(supplier)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          title="View Supplier Ledger & Purchases"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => {
                             setSelectedSupplier(supplier);
                             setIsSupplierModalOpen(true);
@@ -348,6 +358,14 @@ export function SuppliersPage() {
         onClose={() => setIsSupplierModalOpen(false)}
         supplier={selectedSupplier}
       />
+
+      {/* Supplier Ledger Modal */}
+      {ledgerSupplier && (
+        <SupplierLedgerModal
+          supplier={ledgerSupplier}
+          onClose={() => setLedgerSupplier(null)}
+        />
+      )}
     </div>
   );
 }

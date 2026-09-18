@@ -2,6 +2,7 @@ package com.antigravity.billing.service;
 
 import com.antigravity.billing.dto.gst.GstCalculationRequest;
 import com.antigravity.billing.dto.gst.GstCalculationResult;
+import com.antigravity.billing.dto.payment.RecordPaymentRequest;
 import com.antigravity.billing.dto.sale.CreateSaleRequest;
 import com.antigravity.billing.dto.sale.SaleItemRequest;
 import com.antigravity.billing.dto.sale.SaleResponseDto;
@@ -282,4 +283,103 @@ class SaleServiceTest {
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("Credit limit");
     }
+
+    @Test
+    @DisplayName("Successfully records partial payment on sale, updates status to PARTIALLY_PAID and reduces customer balance")
+    void testRecordPaymentPartialSuccess() {
+        UUID saleId = UUID.randomUUID();
+        testCustomer.setOutstandingBalance(new BigDecimal("1000.00"));
+
+        Sale existingSale = Sale.builder()
+                .saleNumber("INV-2026-100")
+                .customer(testCustomer)
+                .grandTotal(new BigDecimal("1000.00"))
+                .amountPaid(new BigDecimal("200.00"))
+                .balanceDue(new BigDecimal("800.00"))
+                .paymentStatus(PaymentStatus.PARTIALLY_PAID)
+                .paymentMethod(PaymentMethod.CASH)
+                .items(new java.util.ArrayList<>())
+                .build();
+        existingSale.setId(saleId);
+
+        when(saleRepository.findById(saleId)).thenReturn(Optional.of(existingSale));
+        when(saleRepository.save(any(Sale.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
+                .amountPaid(new BigDecimal("300.00"))
+                .paymentMethod(PaymentMethod.UPI)
+                .notes("Advance UPI transfer")
+                .build();
+
+        SaleResponseDto result = saleService.recordPayment(saleId, paymentRequest, UUID.randomUUID(), "admin");
+
+        assertThat(result.getAmountPaid()).isEqualByComparingTo("500.00");
+        assertThat(result.getBalanceDue()).isEqualByComparingTo("500.00");
+        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PARTIALLY_PAID);
+        assertThat(testCustomer.getOutstandingBalance()).isEqualByComparingTo("700.00");
+        verify(customerRepository).save(testCustomer);
+        verify(saleRepository).save(existingSale);
+    }
+
+    @Test
+    @DisplayName("Successfully records full payment on sale and marks status as PAID")
+    void testRecordPaymentFullSuccess() {
+        UUID saleId = UUID.randomUUID();
+        testCustomer.setOutstandingBalance(new BigDecimal("500.00"));
+
+        Sale existingSale = Sale.builder()
+                .saleNumber("INV-2026-101")
+                .customer(testCustomer)
+                .grandTotal(new BigDecimal("1000.00"))
+                .amountPaid(new BigDecimal("500.00"))
+                .balanceDue(new BigDecimal("500.00"))
+                .paymentStatus(PaymentStatus.PARTIALLY_PAID)
+                .paymentMethod(PaymentMethod.BANK_TRANSFER)
+                .items(new java.util.ArrayList<>())
+                .build();
+        existingSale.setId(saleId);
+
+        when(saleRepository.findById(saleId)).thenReturn(Optional.of(existingSale));
+        when(saleRepository.save(any(Sale.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
+                .amountPaid(new BigDecimal("500.00"))
+                .paymentMethod(PaymentMethod.BANK_TRANSFER)
+                .notes("Clearance RTGS")
+                .build();
+
+        SaleResponseDto result = saleService.recordPayment(saleId, paymentRequest, UUID.randomUUID(), "admin");
+
+        assertThat(result.getAmountPaid()).isEqualByComparingTo("1000.00");
+        assertThat(result.getBalanceDue()).isEqualByComparingTo("0.00");
+        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(testCustomer.getOutstandingBalance()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("Fails when payment amount exceeds balance due")
+    void testRecordPaymentExceedsBalanceDue() {
+        UUID saleId = UUID.randomUUID();
+        Sale existingSale = Sale.builder()
+                .saleNumber("INV-2026-102")
+                .grandTotal(new BigDecimal("1000.00"))
+                .amountPaid(new BigDecimal("700.00"))
+                .balanceDue(new BigDecimal("300.00"))
+                .paymentStatus(PaymentStatus.PARTIALLY_PAID)
+                .items(new java.util.ArrayList<>())
+                .build();
+        existingSale.setId(saleId);
+
+        when(saleRepository.findById(saleId)).thenReturn(Optional.of(existingSale));
+
+        RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
+                .amountPaid(new BigDecimal("350.00"))
+                .paymentMethod(PaymentMethod.CASH)
+                .build();
+
+        assertThatThrownBy(() -> saleService.recordPayment(saleId, paymentRequest, UUID.randomUUID(), "admin"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("exceeds balance due");
+    }
 }
+

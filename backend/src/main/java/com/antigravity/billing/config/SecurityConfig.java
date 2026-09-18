@@ -1,6 +1,7 @@
 package com.antigravity.billing.config;
 
 import com.antigravity.billing.security.JwtAuthenticationFilter;
+import com.antigravity.billing.security.LoginRateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +26,9 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @org.springframework.beans.factory.annotation.Value("${app.security.rate-limit.enabled:true}")
+    private boolean rateLimitEnabled;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
@@ -36,17 +40,26 @@ public class SecurityConfig {
     }
 
     @Bean
+    public LoginRateLimitFilter loginRateLimitFilter() {
+        LoginRateLimitFilter filter = new LoginRateLimitFilter();
+        filter.setEnabled(rateLimitEnabled);
+        return filter;
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(org.springframework.security.config.Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/login", "/api/v1/health").permitAll()
+                        .requestMatchers("/api/v1/auth/login", "/api/v1/health", "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                // Rate limiter runs BEFORE JWT auth to block abusive login attempts early
+                .addFilterBefore(loginRateLimitFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(jwtAuthenticationFilter, LoginRateLimitFilter.class);
 
         return http.build();
     }

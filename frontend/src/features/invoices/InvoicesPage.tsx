@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from '../../hooks/useToast';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import { Invoice, InvoiceSummary, PageResponse, InvoiceStatus, PaymentStatus } from '../../types';
@@ -19,7 +20,8 @@ import {
   CheckCircle2,
   DollarSign,
   TrendingUp,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 
 export function InvoicesPage() {
@@ -31,6 +33,7 @@ export function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // Summary statistics query
   const { data: summary } = useQuery<InvoiceSummary>({
@@ -85,6 +88,8 @@ export function InvoicesPage() {
 
   const handleDownloadPdf = async (e: React.MouseEvent, inv: Invoice) => {
     e.stopPropagation();
+    if (downloadingId) return;
+    setDownloadingId(inv.id);
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(`/api/v1/invoices/${inv.id}/pdf`, {
@@ -93,7 +98,7 @@ export function InvoicesPage() {
         },
       });
 
-      if (!response.ok) throw new Error('Failed to download PDF');
+      if (!response.ok) throw new Error('PDF generation failed');
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -104,8 +109,11 @@ export function InvoicesPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (err) {
-      alert('Could not download PDF invoice.');
+      toast.success(`Invoice ${inv.invoiceNumber} downloaded successfully!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Could not download PDF invoice. Please try again.');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -315,8 +323,12 @@ export function InvoicesPage() {
                           size="sm"
                           onClick={(e) => handleDownloadPdf(e, inv)}
                           className="h-8 px-2 text-indigo-600"
+                          disabled={downloadingId === inv.id}
+                          title="Download PDF Invoice"
                         >
-                          <Download className="w-4 h-4" />
+                          {downloadingId === inv.id
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Download className="w-4 h-4" />}
                         </Button>
                       </div>
                     </td>

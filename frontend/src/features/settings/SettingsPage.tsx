@@ -5,11 +5,12 @@ import { BusinessSettings } from '../../types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { Building2, Landmark, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UserManagementTab } from './UserManagementTab';
+import { Building2, Landmark, FileText, CheckCircle2, AlertCircle, Users } from 'lucide-react';
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'profile' | 'bank' | 'invoice'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'bank' | 'invoice' | 'users'>('profile');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -118,11 +119,26 @@ export function SettingsPage() {
               : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
           }`}
         >
-          <FileText className="w-4 h-4" />
+        <FileText className="w-4 h-4" />
           Invoice & Tax Defaults
+        </button>
+
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`pb-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+            activeTab === 'users'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          User Management
         </button>
       </div>
 
+      {activeTab === 'users' ? (
+        <UserManagementTab />
+      ) : (
       <form onSubmit={handleSubmit}>
         {activeTab === 'profile' && (
           <Card>
@@ -347,6 +363,7 @@ export function SettingsPage() {
           </Button>
         </div>
       </form>
+      )}
     </div>
   );
 }

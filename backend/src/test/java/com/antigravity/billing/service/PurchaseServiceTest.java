@@ -2,10 +2,12 @@ package com.antigravity.billing.service;
 
 import com.antigravity.billing.dto.gst.GstCalculationRequest;
 import com.antigravity.billing.dto.gst.GstCalculationResult;
+import com.antigravity.billing.dto.payment.RecordPaymentRequest;
 import com.antigravity.billing.dto.purchase.CreatePurchaseRequest;
 import com.antigravity.billing.dto.purchase.PurchaseItemRequest;
 import com.antigravity.billing.dto.purchase.PurchaseResponseDto;
 import com.antigravity.billing.entity.*;
+import com.antigravity.billing.exception.ApiException;
 import com.antigravity.billing.exception.ResourceNotFoundException;
 import com.antigravity.billing.repository.BusinessSettingsRepository;
 import com.antigravity.billing.repository.ProductRepository;
@@ -221,4 +223,103 @@ class PurchaseServiceTest {
         assertThatThrownBy(() -> purchaseService.createPurchase(request, UUID.randomUUID(), "admin"))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    @DisplayName("Successfully records partial payment on purchase, updates status to PARTIALLY_PAID and reduces supplier balance")
+    void testRecordPaymentPartialSuccess() {
+        UUID purchaseId = UUID.randomUUID();
+        testSupplier.setOutstandingBalance(new BigDecimal("2000.00"));
+
+        Purchase existingPurchase = Purchase.builder()
+                .purchaseNumber("PUR-2026-001")
+                .supplier(testSupplier)
+                .grandTotal(new BigDecimal("2000.00"))
+                .amountPaid(new BigDecimal("500.00"))
+                .balanceDue(new BigDecimal("1500.00"))
+                .paymentStatus(PaymentStatus.PARTIALLY_PAID)
+                .paymentMethod(PaymentMethod.BANK_TRANSFER)
+                .items(new java.util.ArrayList<>())
+                .build();
+        existingPurchase.setId(purchaseId);
+
+        when(purchaseRepository.findById(purchaseId)).thenReturn(Optional.of(existingPurchase));
+        when(purchaseRepository.save(any(Purchase.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
+                .amountPaid(new BigDecimal("500.00"))
+                .paymentMethod(PaymentMethod.BANK_TRANSFER)
+                .notes("Partial NEFT settlement")
+                .build();
+
+        PurchaseResponseDto result = purchaseService.recordPayment(purchaseId, paymentRequest, UUID.randomUUID(), "admin");
+
+        assertThat(result.getAmountPaid()).isEqualByComparingTo("1000.00");
+        assertThat(result.getBalanceDue()).isEqualByComparingTo("1000.00");
+        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PARTIALLY_PAID);
+        assertThat(testSupplier.getOutstandingBalance()).isEqualByComparingTo("1500.00");
+        verify(supplierRepository).save(testSupplier);
+        verify(purchaseRepository).save(existingPurchase);
+    }
+
+    @Test
+    @DisplayName("Successfully records full payment on purchase and marks status as PAID")
+    void testRecordPaymentFullSuccess() {
+        UUID purchaseId = UUID.randomUUID();
+        testSupplier.setOutstandingBalance(new BigDecimal("1500.00"));
+
+        Purchase existingPurchase = Purchase.builder()
+                .purchaseNumber("PUR-2026-002")
+                .supplier(testSupplier)
+                .grandTotal(new BigDecimal("2000.00"))
+                .amountPaid(new BigDecimal("500.00"))
+                .balanceDue(new BigDecimal("1500.00"))
+                .paymentStatus(PaymentStatus.PARTIALLY_PAID)
+                .paymentMethod(PaymentMethod.BANK_TRANSFER)
+                .items(new java.util.ArrayList<>())
+                .build();
+        existingPurchase.setId(purchaseId);
+
+        when(purchaseRepository.findById(purchaseId)).thenReturn(Optional.of(existingPurchase));
+        when(purchaseRepository.save(any(Purchase.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
+                .amountPaid(new BigDecimal("1500.00"))
+                .paymentMethod(PaymentMethod.BANK_TRANSFER)
+                .notes("Final settlement")
+                .build();
+
+        PurchaseResponseDto result = purchaseService.recordPayment(purchaseId, paymentRequest, UUID.randomUUID(), "admin");
+
+        assertThat(result.getAmountPaid()).isEqualByComparingTo("2000.00");
+        assertThat(result.getBalanceDue()).isEqualByComparingTo("0.00");
+        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(testSupplier.getOutstandingBalance()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("Fails when purchase payment amount exceeds balance due")
+    void testRecordPaymentExceedsBalanceDue() {
+        UUID purchaseId = UUID.randomUUID();
+        Purchase existingPurchase = Purchase.builder()
+                .purchaseNumber("PUR-2026-003")
+                .grandTotal(new BigDecimal("2000.00"))
+                .amountPaid(new BigDecimal("1800.00"))
+                .balanceDue(new BigDecimal("200.00"))
+                .paymentStatus(PaymentStatus.PARTIALLY_PAID)
+                .items(new java.util.ArrayList<>())
+                .build();
+        existingPurchase.setId(purchaseId);
+
+        when(purchaseRepository.findById(purchaseId)).thenReturn(Optional.of(existingPurchase));
+
+        RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
+                .amountPaid(new BigDecimal("250.00"))
+                .paymentMethod(PaymentMethod.CASH)
+                .build();
+
+        assertThatThrownBy(() -> purchaseService.recordPayment(purchaseId, paymentRequest, UUID.randomUUID(), "admin"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("exceeds balance due");
+    }
 }
+
