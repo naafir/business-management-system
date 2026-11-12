@@ -23,12 +23,16 @@ public class CreateSaleRequest {
 
     private UUID customerId;
 
+    @jakarta.validation.constraints.Size(max = 200, message = "Customer name must not exceed 200 characters")
     private String customerName;
 
+    @jakarta.validation.constraints.Size(max = 15, message = "Customer GSTIN must not exceed 15 characters")
     private String customerGstin;
 
+    @jakarta.validation.constraints.Size(max = 100, message = "Place of supply state must not exceed 100 characters")
     private String placeOfSupplyState;
 
+    @jakarta.validation.constraints.Size(max = 2, message = "Place of supply code must not exceed 2 characters")
     private String placeOfSupplyCode;
 
     @NotNull(message = "Sale date is required")
@@ -44,5 +48,6 @@ public class CreateSaleRequest {
 
     private PaymentMethod paymentMethod;
 
+    @jakarta.validation.constraints.Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
 }

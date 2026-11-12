@@ -77,7 +77,7 @@ class DocumentServiceTest {
                 "file",
                 "tax_invoice_101.pdf",
                 "application/pdf",
-                "PDF Content Stream".getBytes()
+                "%PDF-1.7 Content Stream".getBytes()
         );
 
         when(storageService.storeFile(eq(file), eq("sale"))).thenReturn("sale/stored-uuid-101.pdf");

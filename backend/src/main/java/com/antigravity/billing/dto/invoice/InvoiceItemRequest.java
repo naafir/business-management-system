@@ -22,7 +22,10 @@ public class InvoiceItemRequest {
     @DecimalMin(value = "0.01", message = "Quantity must be greater than zero")
     private BigDecimal quantity;
 
+    @DecimalMin(value = "0.0", inclusive = true, message = "Unit price cannot be negative")
     private BigDecimal unitPrice;
 
+    @DecimalMin(value = "0.0", inclusive = true, message = "Discount percent cannot be negative")
+    @jakarta.validation.constraints.DecimalMax(value = "100.0", inclusive = true, message = "Discount percent cannot exceed 100")
     private BigDecimal discountPercent;
 }

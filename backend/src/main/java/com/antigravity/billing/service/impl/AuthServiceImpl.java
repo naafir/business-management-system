@@ -35,9 +35,22 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+        } catch (org.springframework.security.core.AuthenticationException ex) {
+            auditService.logAction(
+                    null,
+                    request.getUsername(),
+                    "LOGIN_FAILURE",
+                    "User",
+                    null,
+                    "Failed login attempt for username: " + request.getUsername()
+            );
+            throw new org.springframework.security.authentication.BadCredentialsException("Invalid username or password");
+        }
 
         String token = tokenProvider.generateToken(authentication);
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();

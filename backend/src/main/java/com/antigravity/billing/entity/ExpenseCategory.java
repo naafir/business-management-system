@@ -32,9 +32,11 @@ public class ExpenseCategory {
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
     private Instant createdAt = Instant.now();
 
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
+    @Builder.Default
     private Instant updatedAt = Instant.now();
 }

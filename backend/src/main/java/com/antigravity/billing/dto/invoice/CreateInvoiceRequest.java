@@ -21,9 +21,16 @@ import java.util.UUID;
 public class CreateInvoiceRequest {
     private UUID saleId;
     private UUID customerId;
+    @jakarta.validation.constraints.Size(max = 200, message = "Customer name must not exceed 200 characters")
     private String customerName;
+
+    @jakarta.validation.constraints.Size(max = 15, message = "Customer GSTIN must not exceed 15 characters")
     private String customerGstin;
+
+    @jakarta.validation.constraints.Size(max = 100, message = "Place of supply state must not exceed 100 characters")
     private String placeOfSupplyState;
+
+    @jakarta.validation.constraints.Size(max = 2, message = "Place of supply code must not exceed 2 characters")
     private String placeOfSupplyCode;
 
     @NotNull(message = "Invoice date is required")
@@ -35,8 +42,13 @@ public class CreateInvoiceRequest {
     @Valid
     private List<InvoiceItemRequest> items;
 
+    @jakarta.validation.constraints.DecimalMin(value = "0.0", inclusive = true, message = "Amount paid cannot be negative")
     private BigDecimal amountPaid;
     private PaymentMethod paymentMethod;
+
+    @jakarta.validation.constraints.Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
+
+    @jakarta.validation.constraints.Size(max = 2000, message = "Terms and conditions must not exceed 2000 characters")
     private String termsAndConditions;
 }

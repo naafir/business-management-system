@@ -25,5 +25,17 @@ public class RecordPaymentRequest {
     @NotNull(message = "Payment method is required")
     private PaymentMethod paymentMethod;
 
+    @jakarta.validation.constraints.Size(max = 100, message = "Reference number must not exceed 100 characters")
+    private String referenceNumber;
+
+    @jakarta.validation.constraints.Size(max = 500, message = "Notes must not exceed 500 characters")
     private String notes;
+
+    public BigDecimal getAmount() {
+        return amountPaid;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amountPaid = amount;
+    }
 }

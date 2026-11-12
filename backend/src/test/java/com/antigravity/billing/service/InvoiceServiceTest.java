@@ -86,7 +86,7 @@ class InvoiceServiceTest {
     @Test
     @DisplayName("Create Invoice - Should calculate totals and save invoice successfully")
     void createInvoice_Success() {
-        when(businessSettingsRepository.findAll()).thenReturn(List.of(testSettings));
+        when(businessSettingsRepository.findFirstForUpdate()).thenReturn(Optional.of(testSettings));
         when(customerRepository.findById(customerId)).thenReturn(Optional.of(testCustomer));
         when(productRepository.findById(productId)).thenReturn(Optional.of(testProduct));
 

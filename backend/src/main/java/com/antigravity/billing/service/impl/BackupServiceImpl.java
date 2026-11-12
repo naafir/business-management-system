@@ -6,6 +6,7 @@ import com.antigravity.billing.service.AuditService;
 import com.antigravity.billing.service.BackupService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -22,31 +23,59 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Stream;
 
 @Slf4j
 @Service
 public class BackupServiceImpl implements BackupService {
 
+    @FunctionalInterface
+    public interface ProcessExecutor {
+        int execute(List<String> command, Map<String, String> environment) throws IOException, InterruptedException;
+    }
+
+    public static class DefaultProcessExecutor implements ProcessExecutor {
+        @Override
+        public int execute(List<String> command, Map<String, String> environment) throws IOException, InterruptedException {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            if (environment != null && !environment.isEmpty()) {
+                pb.environment().putAll(environment);
+            }
+            Process process = pb.start();
+            return process.waitFor();
+        }
+    }
+
     private final Path backupDirectory;
     private final AuditService auditService;
+    private final ProcessExecutor processExecutor;
 
     @Value("${spring.datasource.url:jdbc:postgresql://localhost:5432/business_billing_db}")
-    private String dbUrl;
+    private String dbUrl = "jdbc:postgresql://localhost:5432/business_billing_db";
 
     @Value("${spring.datasource.username:postgres}")
-    private String dbUser;
+    private String dbUser = "postgres";
 
+    @Value("${spring.datasource.password:${DB_PASSWORD:}}")
+    private String dbPassword = "";
+
+    @Autowired
     public BackupServiceImpl(
             @Value("${app.backup.dir:backups}") String backupDir,
             AuditService auditService
     ) {
+        this(backupDir, auditService, new DefaultProcessExecutor());
+    }
+
+    public BackupServiceImpl(
+            String backupDir,
+            AuditService auditService,
+            ProcessExecutor processExecutor
+    ) {
         this.backupDirectory = Paths.get(backupDir).toAbsolutePath().normalize();
         this.auditService = auditService;
+        this.processExecutor = processExecutor != null ? processExecutor : new DefaultProcessExecutor();
     }
 
     @PostConstruct
@@ -90,13 +119,15 @@ public class BackupServiceImpl implements BackupService {
                         checksum = Files.readString(checksumPath, StandardCharsets.UTF_8).trim();
                     }
 
+                    boolean isVerified = checksum != null && !checksum.isBlank() && sizeBytes > 0;
+
                     results.add(BackupItemDto.builder()
                             .fileName(fileName)
                             .fileSizeBytes(sizeBytes)
                             .formattedSize(formatBytes(sizeBytes))
                             .createdAt(modified)
                             .checksumSha256(checksum)
-                            .status(checksum != null ? "VERIFIED" : "PENDING")
+                            .status(isVerified ? "VERIFIED" : "FAILED")
                             .build());
                 } catch (IOException e) {
                     log.warn("Could not read backup file attributes for {}", p, e);
@@ -115,45 +146,75 @@ public class BackupServiceImpl implements BackupService {
         String fileName = "backup_business_billing_db_" + timestamp + ".dump";
         Path targetFile = backupDirectory.resolve(fileName).normalize();
 
-        log.info("Initiating backup to: {}", targetFile);
+        log.info("Initiating database backup to: {}", targetFile);
 
         try {
-            // Check if pg_dump is available on system
-            boolean pgDumpSuccess = false;
+            // 1. Verify pg_dump availability
             try {
-                ProcessBuilder checkPb = new ProcessBuilder("pg_dump", "--version");
-                Process checkProc = checkPb.start();
-                if (checkProc.waitFor() == 0) {
-                    // Execute pg_dump
-                    ProcessBuilder dumpPb = new ProcessBuilder(
-                            "pg_dump",
-                            "-U", dbUser,
-                            "-F", "c",
-                            "-b",
-                            "-f", targetFile.toString(),
-                            "business_billing_db"
-                    );
-                    dumpPb.environment().put("PGPASSWORD", "change_this_strong_password");
-                    Process dumpProc = dumpPb.start();
-                    int exitCode = dumpProc.waitFor();
-                    if (exitCode == 0) {
-                        pgDumpSuccess = true;
-                    }
+                int checkExitCode = processExecutor.execute(List.of("pg_dump", "--version"), Map.of());
+                if (checkExitCode != 0) {
+                    log.error("pg_dump --version check failed with exit code: {}", checkExitCode);
+                    throw new ApiException("Database backup failed: pg_dump utility returned exit code " + checkExitCode, HttpStatus.INTERNAL_SERVER_ERROR);
                 }
-            } catch (Exception e) {
-                log.info("Native pg_dump not directly accessible from JVM, writing transaction ledger state snapshot.");
+            } catch (IOException e) {
+                log.error("pg_dump executable not found on system PATH: {}", e.getMessage());
+                throw new ApiException("Database backup failed: pg_dump utility is not available on system PATH", HttpStatus.INTERNAL_SERVER_ERROR);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Interrupted while checking pg_dump version");
+                throw new ApiException("Database backup failed: operation interrupted", HttpStatus.INTERNAL_SERVER_ERROR);
             }
 
-            if (!pgDumpSuccess) {
-                // Fallback snapshot dump for dev/test/non-native pg environments
-                String snapshotHeader = "-- ApexBilling Production Database Snapshot\n" +
-                        "-- Timestamp: " + Instant.now() + "\n" +
-                        "-- Format: SQL Archive\n" +
-                        "-- Status: Clean State Verified\n";
-                Files.writeString(targetFile, snapshotHeader, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            // 2. Prepare pg_dump command arguments using externalized DB configuration
+            String host = extractDbHost(dbUrl);
+            String port = extractDbPort(dbUrl);
+            String dbName = extractDbName(dbUrl);
+
+            List<String> dumpCommand = List.of(
+                    "pg_dump",
+                    "-h", host,
+                    "-p", port,
+                    "-U", dbUser,
+                    "-F", "c",
+                    "-b",
+                    "-f", targetFile.toString(),
+                    dbName
+            );
+
+            Map<String, String> env = new HashMap<>();
+            if (StringUtils.hasText(dbPassword)) {
+                env.put("PGPASSWORD", dbPassword);
             }
 
-            // Generate SHA-256 checksum
+            // 3. Execute pg_dump
+            int dumpExitCode;
+            try {
+                dumpExitCode = processExecutor.execute(dumpCommand, env);
+            } catch (IOException e) {
+                log.error("Failed to execute pg_dump process: {}", e.getMessage());
+                cleanUpFile(targetFile);
+                throw new ApiException("Database backup failed: process execution error", HttpStatus.INTERNAL_SERVER_ERROR);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Interrupted while executing pg_dump");
+                cleanUpFile(targetFile);
+                throw new ApiException("Database backup failed: operation interrupted", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
+            if (dumpExitCode != 0) {
+                log.error("pg_dump failed with exit code: {}", dumpExitCode);
+                cleanUpFile(targetFile);
+                throw new ApiException("Database backup failed: pg_dump exited with error code " + dumpExitCode, HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
+            // 4. Verify target dump file exists and is non-empty
+            if (!Files.exists(targetFile) || Files.size(targetFile) == 0) {
+                log.error("pg_dump finished with exit code 0 but backup file is missing or empty at: {}", targetFile);
+                cleanUpFile(targetFile);
+                throw new ApiException("Database backup failed: generated dump file is missing or empty", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
+            // 5. Generate SHA-256 checksum and save to .sha256 file
             byte[] fileBytes = Files.readAllBytes(targetFile);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(fileBytes);
@@ -182,8 +243,11 @@ public class BackupServiceImpl implements BackupService {
                     .status("VERIFIED")
                     .build();
 
+        } catch (ApiException ae) {
+            throw ae;
         } catch (Exception e) {
-            log.error("Failed to execute database backup", e);
+            log.error("Unexpected error during database backup process", e);
+            cleanUpFile(targetFile);
             throw new ApiException("Failed to create database backup: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -210,6 +274,62 @@ public class BackupServiceImpl implements BackupService {
         } catch (MalformedURLException e) {
             throw new ApiException("Backup file URL invalid: " + fileName, HttpStatus.NOT_FOUND);
         }
+    }
+
+    private void cleanUpFile(Path path) {
+        if (path != null && Files.exists(path)) {
+            try {
+                Files.delete(path);
+            } catch (IOException e) {
+                log.warn("Could not delete failed/partial backup file: {}", path, e);
+            }
+        }
+    }
+
+    private String extractDbName(String url) {
+        if (StringUtils.hasText(url) && url.contains("/")) {
+            String cleanUrl = url;
+            if (cleanUrl.contains("?")) {
+                cleanUrl = cleanUrl.substring(0, cleanUrl.indexOf("?"));
+            }
+            int lastSlash = cleanUrl.lastIndexOf("/");
+            if (lastSlash != -1 && lastSlash < cleanUrl.length() - 1) {
+                return cleanUrl.substring(lastSlash + 1);
+            }
+        }
+        return "business_billing_db";
+    }
+
+    private String extractDbHost(String url) {
+        if (StringUtils.hasText(url) && url.startsWith("jdbc:postgresql://")) {
+            String afterPrefix = url.substring("jdbc:postgresql://".length());
+            int slashIdx = afterPrefix.indexOf("/");
+            String hostPort = slashIdx != -1 ? afterPrefix.substring(0, slashIdx) : afterPrefix;
+            if (hostPort.contains(":")) {
+                return hostPort.split(":")[0];
+            } else if (StringUtils.hasText(hostPort)) {
+                return hostPort;
+            }
+        }
+        return "localhost";
+    }
+
+    private String extractDbPort(String url) {
+        if (StringUtils.hasText(url) && url.startsWith("jdbc:postgresql://")) {
+            String afterPrefix = url.substring("jdbc:postgresql://".length());
+            int slashIdx = afterPrefix.indexOf("/");
+            String hostPort = slashIdx != -1 ? afterPrefix.substring(0, slashIdx) : afterPrefix;
+            if (hostPort.contains(":")) {
+                String[] parts = hostPort.split(":");
+                if (parts.length > 1) {
+                    String portCandidate = parts[1].replaceAll("[^0-9]", "");
+                    if (!portCandidate.isEmpty()) {
+                        return portCandidate;
+                    }
+                }
+            }
+        }
+        return "5432";
     }
 
     private String formatBytes(long bytes) {

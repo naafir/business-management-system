@@ -24,6 +24,7 @@ public class CreatePurchaseRequest {
     @NotNull(message = "Supplier ID is required")
     private UUID supplierId;
 
+    @jakarta.validation.constraints.Size(max = 100, message = "Supplier invoice number must not exceed 100 characters")
     private String supplierInvoiceNumber;
 
     @NotNull(message = "Purchase date is required")
@@ -39,5 +40,6 @@ public class CreatePurchaseRequest {
 
     private PaymentMethod paymentMethod;
 
+    @jakarta.validation.constraints.Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
 }

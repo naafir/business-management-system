@@ -114,6 +114,55 @@ public class Invoice {
     @Column(name = "terms_and_conditions", columnDefinition = "TEXT")
     private String termsAndConditions;
 
+    // Historical Seller Snapshot
+    @Column(name = "seller_legal_name", length = 200)
+    private String sellerLegalName;
+
+    @Column(name = "seller_trade_name", length = 200)
+    private String sellerTradeName;
+
+    @Column(name = "seller_gstin", length = 15)
+    private String sellerGstin;
+
+    @Column(name = "seller_address_line1")
+    private String sellerAddressLine1;
+
+    @Column(name = "seller_address_line2")
+    private String sellerAddressLine2;
+
+    @Column(name = "seller_city", length = 100)
+    private String sellerCity;
+
+    @Column(name = "seller_state_name", length = 100)
+    private String sellerStateName;
+
+    @Column(name = "seller_state_code", length = 2)
+    private String sellerStateCode;
+
+    @Column(name = "seller_pin_code", length = 10)
+    private String sellerPinCode;
+
+    @Column(name = "seller_phone", length = 20)
+    private String sellerPhone;
+
+    @Column(name = "seller_email", length = 100)
+    private String sellerEmail;
+
+    @Column(name = "seller_bank_name", length = 100)
+    private String sellerBankName;
+
+    @Column(name = "seller_bank_account_number", length = 50)
+    private String sellerBankAccountNumber;
+
+    @Column(name = "seller_bank_ifsc", length = 20)
+    private String sellerBankIfsc;
+
+    @Column(name = "seller_bank_branch", length = 100)
+    private String sellerBankBranch;
+
+    @Column(name = "seller_bank_upi_id", length = 100)
+    private String sellerBankUpiId;
+
     @Column(name = "created_by")
     private UUID createdBy;
 

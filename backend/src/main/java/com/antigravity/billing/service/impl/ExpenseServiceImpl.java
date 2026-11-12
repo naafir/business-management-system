@@ -81,7 +81,9 @@ public class ExpenseServiceImpl implements ExpenseService {
             LocalDate startDate, LocalDate endDate,
             Pageable pageable
     ) {
-        String searchTerm = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchTerm = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%"
+                : null;
         Page<Expense> page = expenseRepository.findExpensesWithFilters(searchTerm, categoryId, startDate, endDate, pageable);
         return PageResponse.of(page.map(this::mapToDto));
     }

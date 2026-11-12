@@ -2,9 +2,11 @@ package com.antigravity.billing.repository;
 
 import com.antigravity.billing.entity.PaymentStatus;
 import com.antigravity.billing.entity.Sale;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,14 +20,18 @@ import java.util.UUID;
 @Repository
 public interface SaleRepository extends JpaRepository<Sale, UUID> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Sale s WHERE s.id = :id")
+    Optional<Sale> findByIdForUpdate(@Param("id") UUID id);
+
     Optional<Sale> findBySaleNumber(String saleNumber);
 
     boolean existsBySaleNumber(String saleNumber);
 
     @Query("SELECT s FROM Sale s LEFT JOIN s.customer c WHERE " +
-           "(:search IS NULL OR LOWER(s.saleNumber) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "  OR LOWER(s.customerName) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "  OR LOWER(s.customerGstin) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+           "(:search IS NULL OR LOWER(s.saleNumber) LIKE :search " +
+           "  OR LOWER(s.customerName) LIKE :search " +
+           "  OR LOWER(s.customerGstin) LIKE :search) AND " +
            "(:customerId IS NULL OR c.id = :customerId) AND " +
            "(:status IS NULL OR s.paymentStatus = :status) AND " +
            "(:startDate IS NULL OR s.saleDate >= :startDate) AND " +
@@ -66,6 +72,18 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
 
     @Query("SELECT COUNT(s) FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
     long countByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // Composite aggregate for GST & Profit/Loss reports (consolidates 7 queries into 1)
+    @Query("SELECT " +
+           "COALESCE(SUM(s.grandTotal), 0), " +
+           "COALESCE(SUM(s.taxableAmount), 0), " +
+           "COALESCE(SUM(s.cgstAmount), 0), " +
+           "COALESCE(SUM(s.sgstAmount), 0), " +
+           "COALESCE(SUM(s.igstAmount), 0), " +
+           "COALESCE(SUM(CASE WHEN s.customerGstin IS NOT NULL AND s.customerGstin <> '' THEN s.taxableAmount ELSE 0 END), 0), " +
+           "COUNT(s) " +
+           "FROM Sale s WHERE s.saleDate >= :startDate AND s.saleDate <= :endDate")
+    List<Object[]> getSaleGstAggregate(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     // Monthly trend
     @Query("SELECT YEAR(s.saleDate), MONTH(s.saleDate), COALESCE(SUM(s.grandTotal),0), COUNT(s) " +

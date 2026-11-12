@@ -18,6 +18,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -84,6 +85,7 @@ public class InventoryController {
     }
 
     @PostMapping("/adjust")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<InventoryTransactionResponseDto>> adjustStock(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody StockAdjustmentRequest request

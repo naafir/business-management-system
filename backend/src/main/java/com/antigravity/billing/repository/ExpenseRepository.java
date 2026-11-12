@@ -10,14 +10,15 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
 public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
 
     @Query("SELECT e FROM Expense e LEFT JOIN e.category c WHERE " +
-           "(:search IS NULL OR LOWER(e.description) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "  OR LOWER(e.vendorName) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+           "(:search IS NULL OR LOWER(e.description) LIKE :search " +
+           "  OR LOWER(e.vendorName) LIKE :search) AND " +
            "(:categoryId IS NULL OR c.id = :categoryId) AND " +
            "(:startDate IS NULL OR e.expenseDate >= :startDate) AND " +
            "(:endDate IS NULL OR e.expenseDate <= :endDate)")
@@ -37,6 +38,12 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
 
     @Query("SELECT COALESCE(SUM(e.gstAmount), 0) FROM Expense e WHERE e.gstEligible = TRUE AND e.expenseDate >= :startDate AND e.expenseDate <= :endDate")
     BigDecimal sumEligibleGstByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // Monthly trend (eliminates 12 sequential loop queries in getMonthlyTrend)
+    @Query("SELECT YEAR(e.expenseDate), MONTH(e.expenseDate), COALESCE(SUM(e.totalAmount), 0), COUNT(e) " +
+           "FROM Expense e WHERE e.expenseDate >= :startDate AND e.expenseDate <= :endDate " +
+           "GROUP BY YEAR(e.expenseDate), MONTH(e.expenseDate) ORDER BY YEAR(e.expenseDate), MONTH(e.expenseDate)")
+    List<Object[]> monthlyExpensesTrend(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     long count();
 }

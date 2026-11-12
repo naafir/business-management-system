@@ -87,9 +87,10 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("Secured endpoint without token returns 403 Forbidden")
+    @DisplayName("Secured endpoint without token returns 401 Unauthorized")
     void testUnauthorizedSettingsAccess() throws Exception {
         mockMvc.perform(get("/api/v1/settings/profile"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error", is("UNAUTHORIZED")));
     }
 }

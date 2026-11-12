@@ -24,7 +24,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     Optional<Product> findByIdWithPessimisticLock(@Param("id") UUID id);
 
     @Query("SELECT p FROM Product p WHERE " +
-           "(:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.sku) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.hsnSac) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+           "(:search IS NULL OR LOWER(p.name) LIKE :search OR LOWER(p.sku) LIKE :search OR LOWER(p.hsnSac) LIKE :search) AND " +
            "(:categoryId IS NULL OR p.category.id = :categoryId) AND " +
            "(:activeOnly IS NULL OR p.active = :activeOnly)")
     Page<Product> findProductsWithFilters(

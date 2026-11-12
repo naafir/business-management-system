@@ -7,6 +7,8 @@ import com.antigravity.billing.dto.sale.SaleResponseDto;
 import com.antigravity.billing.dto.sale.SaleSummaryDto;
 import com.antigravity.billing.entity.PaymentStatus;
 import com.antigravity.billing.security.CustomUserDetails;
+import com.antigravity.billing.dto.payment.PaymentResponseDto;
+import com.antigravity.billing.service.PaymentService;
 import com.antigravity.billing.service.SaleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -28,6 +31,7 @@ import java.util.UUID;
 public class SaleController {
 
     private final SaleService saleService;
+    private final PaymentService paymentService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<SaleResponseDto>>> listSales(
@@ -91,5 +95,11 @@ public class SaleController {
                 userDetails.getUsername()
         );
         return ResponseEntity.ok(ApiResponse.ok("Payment recorded successfully", updated));
+    }
+
+    @GetMapping("/{id}/payments")
+    public ResponseEntity<ApiResponse<List<PaymentResponseDto>>> getSalePayments(@PathVariable UUID id) {
+        List<PaymentResponseDto> payments = paymentService.getSalePayments(id);
+        return ResponseEntity.ok(ApiResponse.ok(payments));
     }
 }

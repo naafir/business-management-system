@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:business_billing_db}
     username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres_secure_password_change_in_prod}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -25,6 +25,24 @@ spring:
     locations: classpath:db/migration
 
 logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [ReqID: %X{requestId}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [ReqID: %X{requestId}] - %msg%n"
   level:
     com.antigravity.billing: INFO
     org.springframework.security: WARN
+    org.springframework.web: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET}

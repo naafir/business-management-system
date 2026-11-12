@@ -56,6 +56,9 @@ class SaleServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private PaymentService paymentService;
+
     @InjectMocks
     private SaleServiceImpl saleService;
 
@@ -128,8 +131,8 @@ class SaleServiceTest {
                 .paymentMethod(PaymentMethod.UPI)
                 .build();
 
-        when(customerRepository.findById(testCustomer.getId())).thenReturn(Optional.of(testCustomer));
-        when(businessSettingsRepository.findAll()).thenReturn(List.of(testSettings));
+        when(customerRepository.findByIdForUpdate(testCustomer.getId())).thenReturn(Optional.of(testCustomer));
+        when(businessSettingsRepository.findFirstForUpdate()).thenReturn(Optional.of(testSettings));
         when(productRepository.findByIdWithPessimisticLock(testProduct.getId())).thenReturn(Optional.of(testProduct));
 
         GstCalculationResult.GstLineItemResult lineRes = GstCalculationResult.GstLineItemResult.builder()
@@ -221,8 +224,8 @@ class SaleServiceTest {
                 .items(List.of(itemReq))
                 .build();
 
-        when(customerRepository.findById(testCustomer.getId())).thenReturn(Optional.of(testCustomer));
-        when(businessSettingsRepository.findAll()).thenReturn(List.of(testSettings));
+        when(customerRepository.findByIdForUpdate(testCustomer.getId())).thenReturn(Optional.of(testCustomer));
+        when(businessSettingsRepository.findFirstForUpdate()).thenReturn(Optional.of(testSettings));
         when(productRepository.findByIdWithPessimisticLock(testProduct.getId())).thenReturn(Optional.of(testProduct));
 
         assertThatThrownBy(() -> saleService.createSale(request, UUID.randomUUID(), "admin"))
@@ -248,8 +251,8 @@ class SaleServiceTest {
                 .amountPaid(BigDecimal.ZERO) // Balance due will be 1456
                 .build();
 
-        when(customerRepository.findById(testCustomer.getId())).thenReturn(Optional.of(testCustomer));
-        when(businessSettingsRepository.findAll()).thenReturn(List.of(testSettings));
+        when(customerRepository.findByIdForUpdate(testCustomer.getId())).thenReturn(Optional.of(testCustomer));
+        when(businessSettingsRepository.findFirstForUpdate()).thenReturn(Optional.of(testSettings));
         when(productRepository.findByIdWithPessimisticLock(testProduct.getId())).thenReturn(Optional.of(testProduct));
 
         GstCalculationResult gstResult = GstCalculationResult.builder()
@@ -302,8 +305,14 @@ class SaleServiceTest {
                 .build();
         existingSale.setId(saleId);
 
+        doAnswer(inv -> {
+            existingSale.setAmountPaid(new BigDecimal("500.00"));
+            existingSale.setBalanceDue(new BigDecimal("500.00"));
+            existingSale.setPaymentStatus(PaymentStatus.PARTIALLY_PAID);
+            testCustomer.setOutstandingBalance(new BigDecimal("700.00"));
+            return null;
+        }).when(paymentService).recordSalePayment(any(), any(), any(), any());
         when(saleRepository.findById(saleId)).thenReturn(Optional.of(existingSale));
-        when(saleRepository.save(any(Sale.class))).thenAnswer(inv -> inv.getArgument(0));
 
         RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
                 .amountPaid(new BigDecimal("300.00"))
@@ -317,8 +326,7 @@ class SaleServiceTest {
         assertThat(result.getBalanceDue()).isEqualByComparingTo("500.00");
         assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PARTIALLY_PAID);
         assertThat(testCustomer.getOutstandingBalance()).isEqualByComparingTo("700.00");
-        verify(customerRepository).save(testCustomer);
-        verify(saleRepository).save(existingSale);
+        verify(paymentService).recordSalePayment(eq(saleId), any(), any(), any());
     }
 
     @Test
@@ -339,8 +347,14 @@ class SaleServiceTest {
                 .build();
         existingSale.setId(saleId);
 
+        doAnswer(inv -> {
+            existingSale.setAmountPaid(new BigDecimal("1000.00"));
+            existingSale.setBalanceDue(BigDecimal.ZERO);
+            existingSale.setPaymentStatus(PaymentStatus.PAID);
+            testCustomer.setOutstandingBalance(BigDecimal.ZERO);
+            return null;
+        }).when(paymentService).recordSalePayment(any(), any(), any(), any());
         when(saleRepository.findById(saleId)).thenReturn(Optional.of(existingSale));
-        when(saleRepository.save(any(Sale.class))).thenAnswer(inv -> inv.getArgument(0));
 
         RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
                 .amountPaid(new BigDecimal("500.00"))
@@ -360,17 +374,9 @@ class SaleServiceTest {
     @DisplayName("Fails when payment amount exceeds balance due")
     void testRecordPaymentExceedsBalanceDue() {
         UUID saleId = UUID.randomUUID();
-        Sale existingSale = Sale.builder()
-                .saleNumber("INV-2026-102")
-                .grandTotal(new BigDecimal("1000.00"))
-                .amountPaid(new BigDecimal("700.00"))
-                .balanceDue(new BigDecimal("300.00"))
-                .paymentStatus(PaymentStatus.PARTIALLY_PAID)
-                .items(new java.util.ArrayList<>())
-                .build();
-        existingSale.setId(saleId);
 
-        when(saleRepository.findById(saleId)).thenReturn(Optional.of(existingSale));
+        doThrow(new ApiException("exceeds balance due", org.springframework.http.HttpStatus.BAD_REQUEST))
+                .when(paymentService).recordSalePayment(any(), any(), any(), any());
 
         RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
                 .amountPaid(new BigDecimal("350.00"))

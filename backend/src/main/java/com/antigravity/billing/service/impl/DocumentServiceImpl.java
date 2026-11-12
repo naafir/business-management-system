@@ -32,41 +32,36 @@ public class DocumentServiceImpl implements DocumentService {
     private final StorageService storageService;
     private final AuditService auditService;
 
-    private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
+    private static final java.util.Set<String> ALLOWED_EXTENSIONS = java.util.Set.of(".pdf", ".png", ".jpg", ".jpeg");
+    private static final java.util.Set<String> DANGEROUS_EXTENSIONS = java.util.Set.of(
+            ".exe", ".bat", ".cmd", ".ps1", ".sh", ".php", ".jsp", ".js",
+            ".html", ".htm", ".svg", ".jar", ".class", ".vbs", ".dll"
+    );
+    private static final java.util.Set<String> ALLOWED_MIME_TYPES = java.util.Set.of(
             "application/pdf",
-            "image/jpeg",
             "image/png",
-            "image/webp",
-            "text/plain",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.ms-excel"
+            "image/jpeg"
     );
 
-    private static final long MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
     @Override
     @Transactional
     public DocumentResponseDto uploadDocument(MultipartFile file, String entityType, UUID entityId, String notes, UUID userId, String username) {
-        if (file.isEmpty()) {
-            throw new ApiException("Cannot upload an empty file", HttpStatus.BAD_REQUEST);
-        }
+        validateFile(file);
 
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new ApiException("File size exceeds 15MB limit", HttpStatus.BAD_REQUEST);
-        }
-
-        String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
-            log.warn("Uploaded file type: {} not in allowed list, accepting as generic attachment", contentType);
-        }
-
+        String contentType = file.getContentType() != null ? file.getContentType().toLowerCase() : "application/octet-stream";
         String normalizedType = (entityType != null && !entityType.isBlank()) ? entityType.toUpperCase() : "GENERAL";
         String subDir = normalizedType.toLowerCase();
         String relativePath = storageService.storeFile(file, subDir);
 
+        String originalName = org.springframework.util.StringUtils.cleanPath(
+                file.getOriginalFilename() != null ? file.getOriginalFilename() : "file"
+        ).replaceAll("[^a-zA-Z0-9._-]", "_");
+
         Document doc = Document.builder()
-                .fileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "file")
-                .fileType(contentType != null ? contentType : "application/octet-stream")
+                .fileName(originalName)
+                .fileType(contentType)
                 .fileSizeBytes(file.getSize())
                 .filePath(relativePath)
                 .entityType(normalizedType)
@@ -90,13 +85,83 @@ public class DocumentServiceImpl implements DocumentService {
         return mapToDto(saved);
     }
 
+    private void validateFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ApiException("Cannot upload an empty file", HttpStatus.BAD_REQUEST);
+        }
+
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new ApiException("File size exceeds 10MB limit", HttpStatus.BAD_REQUEST);
+        }
+
+        String rawFilename = file.getOriginalFilename();
+        if (rawFilename == null || rawFilename.isBlank()) {
+            throw new ApiException("Invalid filename", HttpStatus.BAD_REQUEST);
+        }
+
+        String cleanFilename = org.springframework.util.StringUtils.cleanPath(rawFilename);
+        if (cleanFilename.contains("..") || cleanFilename.contains("/") || cleanFilename.contains("\\")) {
+            throw new ApiException("Filename contains invalid path sequence", HttpStatus.BAD_REQUEST);
+        }
+
+        String lowerName = cleanFilename.toLowerCase();
+        for (String dangerousExt : DANGEROUS_EXTENSIONS) {
+            if (lowerName.contains(dangerousExt)) {
+                throw new ApiException("Dangerous or executable file extension prohibited", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        int lastDotIndex = lowerName.lastIndexOf('.');
+        if (lastDotIndex <= 0) {
+            throw new ApiException("File must have a valid extension (.pdf, .png, .jpg, .jpeg)", HttpStatus.BAD_REQUEST);
+        }
+
+        String extension = lowerName.substring(lastDotIndex);
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
+            throw new ApiException("Unsupported file type extension: " + extension, HttpStatus.BAD_REQUEST);
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_MIME_TYPES.contains(contentType.toLowerCase())) {
+            throw new ApiException("Unsupported MIME content type: " + contentType, HttpStatus.BAD_REQUEST);
+        }
+
+        // Validate actual file content header magic bytes
+        try (java.io.InputStream is = file.getInputStream()) {
+            byte[] header = is.readNBytes(8);
+            if (header.length < 4) {
+                throw new ApiException("Invalid file content signature", HttpStatus.BAD_REQUEST);
+            }
+
+            if (extension.equals(".pdf")) {
+                if (header[0] != 0x25 || header[1] != 0x50 || header[2] != 0x44 || header[3] != 0x46) {
+                    throw new ApiException("File content magic bytes do not match PDF format", HttpStatus.BAD_REQUEST);
+                }
+            } else if (extension.equals(".png")) {
+                if (header[0] != (byte) 0x89 || header[1] != 0x50 || header[2] != 0x4E || header[3] != 0x47) {
+                    throw new ApiException("File content magic bytes do not match PNG format", HttpStatus.BAD_REQUEST);
+                }
+            } else if (extension.equals(".jpg") || extension.equals(".jpeg")) {
+                if (header[0] != (byte) 0xFF || header[1] != (byte) 0xD8 || header[2] != (byte) 0xFF) {
+                    throw new ApiException("File content magic bytes do not match JPEG format", HttpStatus.BAD_REQUEST);
+                }
+            }
+        } catch (ApiException ae) {
+            throw ae;
+        } catch (Exception e) {
+            throw new ApiException("Could not read file content for validation", HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
     public PageResponse<DocumentResponseDto> listDocuments(String entityType, String search, Pageable pageable) {
         String typeFilter = (entityType != null && !entityType.isBlank() && !entityType.equalsIgnoreCase("ALL"))
                 ? entityType.toUpperCase()
                 : null;
-        String searchFilter = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchFilter = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%"
+                : null;
 
         Page<Document> page = documentRepository.findDocumentsWithFilter(typeFilter, searchFilter, pageable);
         return PageResponse.of(page.map(this::mapToDto));
@@ -106,7 +171,13 @@ public class DocumentServiceImpl implements DocumentService {
     @Transactional(readOnly = true)
     public Resource loadDocumentFile(UUID id) {
         Document doc = getDocument(id);
-        return storageService.loadFileAsResource(doc.getFilePath());
+        try {
+            return storageService.loadFileAsResource(doc.getFilePath());
+        } catch (ApiException ae) {
+            throw ae;
+        } catch (Exception e) {
+            throw new ApiException("Document file not found on disk", HttpStatus.NOT_FOUND);
+        }
     }
 
     @Override

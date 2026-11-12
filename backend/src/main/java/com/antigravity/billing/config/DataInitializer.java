@@ -6,6 +6,7 @@ import com.antigravity.billing.repository.ExpenseCategoryRepository;
 import com.antigravity.billing.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -21,16 +22,32 @@ public class DataInitializer implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final ExpenseCategoryRepository expenseCategoryRepository;
 
+    @Value("${app.security.initial-admin.username:${INITIAL_ADMIN_USERNAME:admin}}")
+    private String initialAdminUsername;
+
+    @Value("${app.security.initial-admin.email:${INITIAL_ADMIN_EMAIL:owner@mybusiness.local}}")
+    private String initialAdminEmail;
+
+    @Value("${app.security.initial-admin.password:${INITIAL_ADMIN_PASSWORD:Admin@SecurePass2026!}}")
+    private String initialAdminPassword;
+
     @Override
     public void run(String... args) {
-        // Re-hash admin password if needed
-        userRepository.findByUsername("admin").ifPresent(admin -> {
-            if (!passwordEncoder.matches("Admin@SecurePass2026!", admin.getPasswordHash())) {
-                admin.setPasswordHash(passwordEncoder.encode("Admin@SecurePass2026!"));
-                userRepository.save(admin);
-                log.info("Default admin credentials initialized with fresh BCrypt hash.");
-            }
-        });
+        // Initialize default administrator ONLY if no admin user exists
+        if (!userRepository.existsByUsername(initialAdminUsername)) {
+            User initialAdmin = User.builder()
+                    .username(initialAdminUsername)
+                    .email(initialAdminEmail)
+                    .passwordHash(passwordEncoder.encode(initialAdminPassword))
+                    .fullName("Business Owner")
+                    .role("OWNER")
+                    .active(true)
+                    .build();
+            userRepository.save(initialAdmin);
+            log.info("Initial administrator '{}' created successfully.", initialAdminUsername);
+        } else {
+            log.info("Administrator '{}' already exists. Existing credentials preserved.", initialAdminUsername);
+        }
 
         // Seed default expense categories if none exist
         if (expenseCategoryRepository.count() == 0) {

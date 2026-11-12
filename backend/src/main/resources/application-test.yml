@@ -25,4 +25,6 @@ app:
   security:
     rate-limit:
       enabled: false
+    jwt:
+      secret: ${JWT_SECRET:test-secret-key-for-unit-tests-only-not-real}
 

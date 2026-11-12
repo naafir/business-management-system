@@ -2,9 +2,11 @@ package com.antigravity.billing.repository;
 
 import com.antigravity.billing.entity.PaymentStatus;
 import com.antigravity.billing.entity.Purchase;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,14 +20,18 @@ import java.util.UUID;
 @Repository
 public interface PurchaseRepository extends JpaRepository<Purchase, UUID> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Purchase p WHERE p.id = :id")
+    Optional<Purchase> findByIdForUpdate(@Param("id") UUID id);
+
     Optional<Purchase> findByPurchaseNumber(String purchaseNumber);
 
     boolean existsByPurchaseNumber(String purchaseNumber);
 
     @Query("SELECT p FROM Purchase p LEFT JOIN p.supplier s WHERE " +
-           "(:search IS NULL OR LOWER(p.purchaseNumber) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "  OR LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "  OR LOWER(p.supplierInvoiceNumber) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+           "(:search IS NULL OR LOWER(p.purchaseNumber) LIKE :search " +
+           "  OR LOWER(s.name) LIKE :search " +
+           "  OR LOWER(p.supplierInvoiceNumber) LIKE :search) AND " +
            "(:supplierId IS NULL OR s.id = :supplierId) AND " +
            "(:status IS NULL OR p.paymentStatus = :status) AND " +
            "(:startDate IS NULL OR p.purchaseDate >= :startDate) AND " +
@@ -63,6 +69,17 @@ public interface PurchaseRepository extends JpaRepository<Purchase, UUID> {
 
     @Query("SELECT COUNT(p) FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
     long countByDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // Composite aggregate for GST & Profit/Loss reports (consolidates 6 queries into 1)
+    @Query("SELECT " +
+           "COALESCE(SUM(p.grandTotal), 0), " +
+           "COALESCE(SUM(p.taxableAmount), 0), " +
+           "COALESCE(SUM(p.cgstAmount), 0), " +
+           "COALESCE(SUM(p.sgstAmount), 0), " +
+           "COALESCE(SUM(p.igstAmount), 0), " +
+           "COUNT(p) " +
+           "FROM Purchase p WHERE p.purchaseDate >= :startDate AND p.purchaseDate <= :endDate")
+    List<Object[]> getPurchaseGstAggregate(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     // Monthly trend
     @Query("SELECT YEAR(p.purchaseDate), MONTH(p.purchaseDate), COALESCE(SUM(p.grandTotal),0), COUNT(p) " +

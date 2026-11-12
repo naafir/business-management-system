@@ -34,5 +34,7 @@ public interface InvoiceService {
 
     InvoiceResponseDto finalizeInvoice(UUID id);
 
+    InvoiceResponseDto cancelInvoice(UUID id, UUID userId, String username);
+
     byte[] downloadInvoicePdf(UUID id);
 }

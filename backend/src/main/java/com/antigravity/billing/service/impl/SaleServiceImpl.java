@@ -14,6 +14,7 @@ import com.antigravity.billing.repository.SaleRepository;
 import com.antigravity.billing.service.AuditService;
 import com.antigravity.billing.service.GstCalculationService;
 import com.antigravity.billing.service.InventoryService;
+import com.antigravity.billing.service.PaymentService;
 import com.antigravity.billing.service.SaleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -39,9 +40,10 @@ public class SaleServiceImpl implements SaleService {
     private final GstCalculationService gstCalculationService;
     private final InventoryService inventoryService;
     private final AuditService auditService;
+    private final PaymentService paymentService;
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SaleResponseDto createSale(CreateSaleRequest request, UUID userId, String username) {
         Customer customer = null;
         String customerName;
@@ -49,12 +51,13 @@ public class SaleServiceImpl implements SaleService {
         String placeOfSupplyState;
         String placeOfSupplyCode;
 
-        BusinessSettings settings = businessSettingsRepository.findAll().stream().findFirst().orElse(null);
+        BusinessSettings settings = businessSettingsRepository.findFirstForUpdate().orElse(null);
         String businessStateCode = settings != null && settings.getStateCode() != null ? settings.getStateCode() : "27";
         String businessStateName = settings != null && settings.getStateName() != null ? settings.getStateName() : "Maharashtra";
 
+        // Consistent lock order: BusinessSettings -> Customer -> Products
         if (request.getCustomerId() != null) {
-            customer = customerRepository.findById(request.getCustomerId())
+            customer = customerRepository.findByIdForUpdate(request.getCustomerId())
                     .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
             if (!customer.isActive()) {
                 throw new ApiException("Customer '" + customer.getName() + "' is inactive", HttpStatus.BAD_REQUEST);
@@ -73,25 +76,46 @@ public class SaleServiceImpl implements SaleService {
             placeOfSupplyCode = request.getPlaceOfSupplyCode() != null ? request.getPlaceOfSupplyCode() : businessStateCode;
         }
 
-        List<GstCalculationRequest.GstLineItemInput> gstItems = new ArrayList<>();
+        // Deadlock prevention: Lock distinct products in deterministic ascending order of product ID
+        List<UUID> sortedProductIds = request.getItems().stream()
+                .map(SaleItemRequest::getProductId)
+                .distinct()
+                .sorted()
+                .toList();
+
         Map<UUID, Product> productMap = new LinkedHashMap<>();
+        for (UUID pid : sortedProductIds) {
+            Product product = productRepository.findByIdWithPessimisticLock(pid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", pid));
+            productMap.put(pid, product);
+        }
+
+        List<GstCalculationRequest.GstLineItemInput> gstItems = new ArrayList<>();
         Map<UUID, BigDecimal> unitPriceMap = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> allocatedStockMap = new HashMap<>();
 
         for (SaleItemRequest itemReq : request.getItems()) {
-            Product product = productRepository.findByIdWithPessimisticLock(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
+            Product product = productMap.get(itemReq.getProductId());
 
             if (!product.isActive()) {
                 throw new ApiException("Product '" + product.getName() + "' is inactive", HttpStatus.BAD_REQUEST);
             }
 
-            if (!product.isAllowNegativeStock() && product.getCurrentStock().compareTo(itemReq.getQuantity()) < 0) {
+            BigDecimal currentAllocated = allocatedStockMap.getOrDefault(product.getId(), BigDecimal.ZERO);
+            BigDecimal newAllocated = currentAllocated.add(itemReq.getQuantity());
+
+            if (!product.isAllowNegativeStock() && product.getCurrentStock().compareTo(newAllocated) < 0) {
+                BigDecimal available = product.getCurrentStock().subtract(currentAllocated);
+                if (available.compareTo(BigDecimal.ZERO) < 0) {
+                    available = BigDecimal.ZERO;
+                }
                 throw new ApiException(
                         String.format("Insufficient stock for product '%s'. Available: %s, Requested: %s",
-                                product.getName(), product.getCurrentStock(), itemReq.getQuantity()),
+                                product.getName(), available, itemReq.getQuantity()),
                         HttpStatus.BAD_REQUEST
                 );
             }
+            allocatedStockMap.put(product.getId(), newAllocated);
 
             BigDecimal unitPrice = itemReq.getUnitPrice() != null ? itemReq.getUnitPrice() : product.getSellingPrice();
             unitPriceMap.put(product.getId(), unitPrice);
@@ -108,8 +132,6 @@ public class SaleServiceImpl implements SaleService {
                     .discount(discountAmount)
                     .gstRatePercent(gstRatePercent)
                     .build());
-
-            productMap.put(itemReq.getProductId(), product);
         }
 
         GstCalculationResult gstResult = gstCalculationService.calculate(GstCalculationRequest.builder()
@@ -247,66 +269,10 @@ public class SaleServiceImpl implements SaleService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SaleResponseDto recordPayment(UUID id, com.antigravity.billing.dto.payment.RecordPaymentRequest request, UUID userId, String username) {
-        Sale sale = saleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Sale", "id", id));
-
-        BigDecimal paymentAmount = request.getAmountPaid().setScale(2, RoundingMode.HALF_UP);
-        if (paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ApiException("Payment amount must be greater than zero", HttpStatus.BAD_REQUEST);
-        }
-
-        BigDecimal currentBalance = sale.getBalanceDue();
-        if (paymentAmount.compareTo(currentBalance.add(new BigDecimal("0.01"))) > 0) {
-            throw new ApiException("Payment amount ₹" + paymentAmount + " exceeds balance due of ₹" + currentBalance, HttpStatus.BAD_REQUEST);
-        }
-
-        BigDecimal newAmountPaid = sale.getAmountPaid().add(paymentAmount).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal newBalanceDue = sale.getGrandTotal().subtract(newAmountPaid).setScale(2, RoundingMode.HALF_UP);
-
-        if (newBalanceDue.compareTo(BigDecimal.ZERO) <= 0) {
-            newBalanceDue = BigDecimal.ZERO;
-            sale.setPaymentStatus(PaymentStatus.PAID);
-        } else {
-            sale.setPaymentStatus(PaymentStatus.PARTIALLY_PAID);
-        }
-
-        sale.setAmountPaid(newAmountPaid);
-        sale.setBalanceDue(newBalanceDue);
-        if (request.getPaymentMethod() != null) {
-            sale.setPaymentMethod(request.getPaymentMethod());
-        }
-
-        if (request.getNotes() != null && !request.getNotes().isBlank()) {
-            String existingNotes = sale.getNotes() != null ? sale.getNotes() + " | " : "";
-            sale.setNotes(existingNotes + "Payment: ₹" + paymentAmount + " (" + request.getPaymentMethod() + ") " + request.getNotes());
-        }
-
-        Sale updatedSale = saleRepository.save(sale);
-
-        // Update customer balance if linked
-        if (sale.getCustomer() != null) {
-            Customer customer = sale.getCustomer();
-            BigDecimal customerBal = customer.getOutstandingBalance() != null ? customer.getOutstandingBalance() : BigDecimal.ZERO;
-            BigDecimal newCustBal = customerBal.subtract(paymentAmount);
-            if (newCustBal.compareTo(BigDecimal.ZERO) < 0) {
-                newCustBal = BigDecimal.ZERO;
-            }
-            customer.setOutstandingBalance(newCustBal);
-            customerRepository.save(customer);
-        }
-
-        auditService.logAction(
-                userId,
-                username,
-                "RECORD_PAYMENT",
-                "SALE",
-                sale.getId().toString(),
-                "Recorded payment of ₹" + paymentAmount + " via " + request.getPaymentMethod() + " for Sale #" + sale.getSaleNumber() + ". Remaining balance: ₹" + newBalanceDue
-        );
-
-        return mapToDto(updatedSale);
+        paymentService.recordSalePayment(id, request, userId, username);
+        return getSaleById(id);
     }
 
     @Override
@@ -335,7 +301,9 @@ public class SaleServiceImpl implements SaleService {
             LocalDate endDate,
             Pageable pageable
     ) {
-        String searchTerm = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchTerm = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%"
+                : null;
         Page<Sale> page = saleRepository.findSalesWithFilters(searchTerm, customerId, status, startDate, endDate, pageable);
         return PageResponse.of(page.map(this::mapToDto));
     }

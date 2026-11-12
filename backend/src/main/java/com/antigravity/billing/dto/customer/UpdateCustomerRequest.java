@@ -17,10 +17,20 @@ public class UpdateCustomerRequest {
     @Size(max = 200, message = "Business name must not exceed 200 characters")
     private String businessName;
 
+    @Size(max = 20, message = "Phone must not exceed 20 characters")
     private String phone;
+
+    @jakarta.validation.constraints.Email(message = "Invalid email format")
+    @Size(max = 100, message = "Email must not exceed 100 characters")
     private String email;
+
+    @Size(max = 300, message = "Billing address must not exceed 300 characters")
     private String billingAddress;
+
+    @Size(max = 300, message = "Shipping address must not exceed 300 characters")
     private String shippingAddress;
+
+    @Size(max = 100, message = "City must not exceed 100 characters")
     private String city;
 
     @NotBlank(message = "State name is required")

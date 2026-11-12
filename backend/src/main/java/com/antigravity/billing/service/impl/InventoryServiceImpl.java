@@ -22,8 +22,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -36,7 +44,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final AuditService auditService;
 
     @Override
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public InventoryTransactionResponseDto adjustStock(StockAdjustmentRequest request, UUID userId, String username) {
         // 1. Acquire exclusive lock on the product row
         Product product = productRepository.findByIdWithPessimisticLock(request.getProductId())
@@ -123,7 +131,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public InventoryTransaction recordTransaction(
             Product product,
             InventoryTransactionType type,
@@ -169,7 +177,35 @@ public class InventoryServiceImpl implements InventoryService {
             Instant toDate,
             Pageable pageable
     ) {
-        return transactionRepository.findWithFilters(productId, type, fromDate, toDate, pageable)
+        Specification<InventoryTransaction> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (productId != null) {
+                predicates.add(cb.equal(root.get("product").get("id"), productId));
+            }
+            if (type != null) {
+                predicates.add(cb.equal(root.get("transactionType"), type));
+            }
+            if (fromDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromDate));
+            }
+            if (toDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), toDate));
+            }
+            if (Long.class != query.getResultType() && long.class != query.getResultType()) {
+                root.fetch("product", JoinType.LEFT);
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Pageable sortedPageable = (pageable != null && pageable.getSort().isSorted())
+                ? pageable
+                : PageRequest.of(
+                        pageable != null ? pageable.getPageNumber() : 0,
+                        pageable != null ? pageable.getPageSize() : 20,
+                        Sort.by(Sort.Direction.DESC, "createdAt")
+                );
+
+        return transactionRepository.findAll(spec, sortedPageable)
                 .map(this::mapToDto);
     }
 

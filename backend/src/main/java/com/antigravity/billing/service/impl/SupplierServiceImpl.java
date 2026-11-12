@@ -99,7 +99,9 @@ public class SupplierServiceImpl implements SupplierService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<SupplierResponseDto> listSuppliers(String search, Boolean activeOnly, Pageable pageable) {
-        String searchTerm = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchTerm = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%"
+                : null;
         Page<Supplier> page = supplierRepository.findSuppliersWithFilters(searchTerm, activeOnly, pageable);
         return PageResponse.of(page.map(this::mapToDto));
     }

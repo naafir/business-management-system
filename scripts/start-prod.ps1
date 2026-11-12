@@ -99,7 +99,7 @@ Write-Host "  Frontend:  http://localhost" -ForegroundColor White
 Write-Host "  API:       http://localhost/api/v1" -ForegroundColor White
 Write-Host "  Health:    http://localhost/api/v1/health" -ForegroundColor White
 Write-Host ""
-Write-Host "  Login:     admin / Admin@SecurePass2026!" -ForegroundColor DarkYellow
+Write-Host "  Login:     admin / [Password configured in .env]" -ForegroundColor DarkYellow
 Write-Host ""
 Write-Host "  View logs:   docker-compose logs -f" -ForegroundColor DarkGray
 Write-Host "  Stop:        docker-compose down" -ForegroundColor DarkGray

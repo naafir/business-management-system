@@ -15,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -66,10 +67,12 @@ public class DocumentController {
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID id) {
         Document doc = documentService.getDocument(id);
         Resource resource = documentService.loadDocumentFile(id);
+        String safeName = sanitizeFilename(doc.getFileName());
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(doc.getFileType() != null ? doc.getFileType() : "application/octet-stream"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + doc.getFileName() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + safeName + "\"")
+                .header("X-Content-Type-Options", "nosniff")
                 .body(resource);
     }
 
@@ -77,19 +80,27 @@ public class DocumentController {
     public ResponseEntity<Resource> previewDocument(@PathVariable UUID id) {
         Document doc = documentService.getDocument(id);
         Resource resource = documentService.loadDocumentFile(id);
+        String safeName = sanitizeFilename(doc.getFileName());
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(doc.getFileType() != null ? doc.getFileType() : "application/octet-stream"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getFileName() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + safeName + "\"")
+                .header("X-Content-Type-Options", "nosniff")
                 .body(resource);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteDocument(
             @PathVariable UUID id,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
         documentService.deleteDocument(id, userDetails.getId(), userDetails.getUsername());
         return ResponseEntity.ok(ApiResponse.ok("Document deleted successfully", null));
+    }
+
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.isBlank()) return "document";
+        return filename.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 }

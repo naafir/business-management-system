@@ -26,13 +26,16 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public GstOutputSummaryDto getGstOutputSummary(LocalDate startDate, LocalDate endDate) {
-        BigDecimal revenue = saleRepository.sumRevenueByDateRange(startDate, endDate);
-        BigDecimal taxable = saleRepository.sumTaxableValueByDateRange(startDate, endDate);
-        BigDecimal cgst = saleRepository.sumCgstByDateRange(startDate, endDate);
-        BigDecimal sgst = saleRepository.sumSgstByDateRange(startDate, endDate);
-        BigDecimal igst = saleRepository.sumIgstByDateRange(startDate, endDate);
-        BigDecimal b2bTaxable = saleRepository.sumB2bTaxableValueByDateRange(startDate, endDate);
-        long count = saleRepository.countByDateRange(startDate, endDate);
+        List<Object[]> rows = saleRepository.getSaleGstAggregate(startDate, endDate);
+        Object[] row = (!rows.isEmpty() && rows.get(0) != null) ? rows.get(0) : new Object[7];
+
+        BigDecimal revenue = toBd(row[0]);
+        BigDecimal taxable = toBd(row[1]);
+        BigDecimal cgst = toBd(row[2]);
+        BigDecimal sgst = toBd(row[3]);
+        BigDecimal igst = toBd(row[4]);
+        BigDecimal b2bTaxable = toBd(row[5]);
+        long count = toLong(row[6]);
 
         return GstOutputSummaryDto.builder()
                 .totalRevenue(revenue)
@@ -50,12 +53,15 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public GstInputSummaryDto getGstInputSummary(LocalDate startDate, LocalDate endDate) {
-        BigDecimal purchases = purchaseRepository.sumPurchasesByDateRange(startDate, endDate);
-        BigDecimal taxable = purchaseRepository.sumPurchaseTaxableByDateRange(startDate, endDate);
-        BigDecimal cgst = purchaseRepository.sumPurchaseCgstByDateRange(startDate, endDate);
-        BigDecimal sgst = purchaseRepository.sumPurchaseSgstByDateRange(startDate, endDate);
-        BigDecimal igst = purchaseRepository.sumPurchaseIgstByDateRange(startDate, endDate);
-        long count = purchaseRepository.countByDateRange(startDate, endDate);
+        List<Object[]> rows = purchaseRepository.getPurchaseGstAggregate(startDate, endDate);
+        Object[] row = (!rows.isEmpty() && rows.get(0) != null) ? rows.get(0) : new Object[6];
+
+        BigDecimal purchases = toBd(row[0]);
+        BigDecimal taxable = toBd(row[1]);
+        BigDecimal cgst = toBd(row[2]);
+        BigDecimal sgst = toBd(row[3]);
+        BigDecimal igst = toBd(row[4]);
+        long count = toLong(row[5]);
 
         return GstInputSummaryDto.builder()
                 .totalPurchaseValue(purchases)
@@ -120,16 +126,18 @@ public class ReportServiceImpl implements ReportService {
             purchCountMap.put(month, ((Number) row[3]).longValue());
         }
 
-        // Expense sums per month (approximate: use full year, not per-month in query)
-        // We do a simple query per month for expenses
+        // Build map month -> expenses (single aggregate query for full year replacing 12 monthly loop queries)
+        Map<Integer, BigDecimal> expensesMap = new HashMap<>();
+        for (Object[] row : expenseRepository.monthlyExpensesTrend(start, end)) {
+            int month = ((Number) row[1]).intValue();
+            expensesMap.put(month, toBd(row[2]));
+        }
+
         List<MonthlyTrendDto> result = new ArrayList<>();
         for (int m = 1; m <= 12; m++) {
-            LocalDate ms = LocalDate.of(year, m, 1);
-            LocalDate me = ms.withDayOfMonth(ms.lengthOfMonth());
-            BigDecimal expAmt = expenseRepository.sumExpensesByDateRange(ms, me);
-
             BigDecimal salesAmt = salesMap.containsKey(m) ? salesMap.get(m)[0] : BigDecimal.ZERO;
             BigDecimal purchAmt = purchMap.containsKey(m) ? purchMap.get(m)[0] : BigDecimal.ZERO;
+            BigDecimal expAmt = expensesMap.getOrDefault(m, BigDecimal.ZERO);
             long sc = salesCountMap.getOrDefault(m, 0L);
             long pc = purchCountMap.getOrDefault(m, 0L);
 
@@ -150,21 +158,27 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ProfitLossDto getProfitLoss(LocalDate startDate, LocalDate endDate) {
-        BigDecimal revenue = saleRepository.sumRevenueByDateRange(startDate, endDate);
-        BigDecimal purchases = purchaseRepository.sumPurchasesByDateRange(startDate, endDate);
+        List<Object[]> saleRows = saleRepository.getSaleGstAggregate(startDate, endDate);
+        Object[] saleRow = (!saleRows.isEmpty() && saleRows.get(0) != null) ? saleRows.get(0) : new Object[7];
+        BigDecimal revenue = toBd(saleRow[0]);
+        BigDecimal revenueTaxable = toBd(saleRow[1]);
+        BigDecimal saleCgst = toBd(saleRow[2]);
+        BigDecimal saleSgst = toBd(saleRow[3]);
+        BigDecimal saleIgst = toBd(saleRow[4]);
+        BigDecimal taxCollected = saleCgst.add(saleSgst).add(saleIgst);
+
+        List<Object[]> purchRows = purchaseRepository.getPurchaseGstAggregate(startDate, endDate);
+        Object[] purchRow = (!purchRows.isEmpty() && purchRows.get(0) != null) ? purchRows.get(0) : new Object[6];
+        BigDecimal purchases = toBd(purchRow[0]);
+        BigDecimal cogsTaxable = toBd(purchRow[1]);
+        BigDecimal purchCgst = toBd(purchRow[2]);
+        BigDecimal purchSgst = toBd(purchRow[3]);
+        BigDecimal purchIgst = toBd(purchRow[4]);
+        BigDecimal itc = purchCgst.add(purchSgst).add(purchIgst);
+
         BigDecimal expenses = expenseRepository.sumExpensesByDateRange(startDate, endDate);
 
-        BigDecimal taxCollected = saleRepository.sumCgstByDateRange(startDate, endDate)
-                .add(saleRepository.sumSgstByDateRange(startDate, endDate))
-                .add(saleRepository.sumIgstByDateRange(startDate, endDate));
-
-        BigDecimal itc = purchaseRepository.sumPurchaseCgstByDateRange(startDate, endDate)
-                .add(purchaseRepository.sumPurchaseSgstByDateRange(startDate, endDate))
-                .add(purchaseRepository.sumPurchaseIgstByDateRange(startDate, endDate));
-
         // Gross profit = Revenue (excl GST) - COGS (purchases excl GST)
-        BigDecimal revenueTaxable = saleRepository.sumTaxableValueByDateRange(startDate, endDate);
-        BigDecimal cogsTaxable = purchaseRepository.sumPurchaseTaxableByDateRange(startDate, endDate);
         BigDecimal grossProfit = revenueTaxable.subtract(cogsTaxable);
         BigDecimal netProfit = grossProfit.subtract(expenses);
         BigDecimal margin = revenueTaxable.compareTo(BigDecimal.ZERO) > 0
@@ -188,5 +202,15 @@ public class ReportServiceImpl implements ReportService {
         if (val == null) return BigDecimal.ZERO;
         if (val instanceof BigDecimal) return (BigDecimal) val;
         return new BigDecimal(val.toString());
+    }
+
+    private long toLong(Object val) {
+        if (val == null) return 0L;
+        if (val instanceof Number) return ((Number) val).longValue();
+        try {
+            return Long.parseLong(val.toString());
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
     }
 }

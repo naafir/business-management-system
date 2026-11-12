@@ -128,7 +128,7 @@ class PurchaseServiceTest {
                 .paymentMethod(PaymentMethod.BANK_TRANSFER)
                 .build();
 
-        when(supplierRepository.findById(testSupplier.getId())).thenReturn(Optional.of(testSupplier));
+        when(supplierRepository.findByIdForUpdate(testSupplier.getId())).thenReturn(Optional.of(testSupplier));
         when(businessSettingsRepository.findAll()).thenReturn(List.of(testSettings));
         when(productRepository.findByIdWithPessimisticLock(testProduct.getId())).thenReturn(Optional.of(testProduct));
 
@@ -218,7 +218,7 @@ class PurchaseServiceTest {
                 .items(Collections.emptyList())
                 .build();
 
-        when(supplierRepository.findById(fakeSupplierId)).thenReturn(Optional.empty());
+        when(supplierRepository.findByIdForUpdate(fakeSupplierId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> purchaseService.createPurchase(request, UUID.randomUUID(), "admin"))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -242,7 +242,8 @@ class PurchaseServiceTest {
                 .build();
         existingPurchase.setId(purchaseId);
 
-        when(purchaseRepository.findById(purchaseId)).thenReturn(Optional.of(existingPurchase));
+        when(purchaseRepository.findByIdForUpdate(purchaseId)).thenReturn(Optional.of(existingPurchase));
+        when(supplierRepository.findByIdForUpdate(testSupplier.getId())).thenReturn(Optional.of(testSupplier));
         when(purchaseRepository.save(any(Purchase.class))).thenAnswer(inv -> inv.getArgument(0));
 
         RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
@@ -279,7 +280,8 @@ class PurchaseServiceTest {
                 .build();
         existingPurchase.setId(purchaseId);
 
-        when(purchaseRepository.findById(purchaseId)).thenReturn(Optional.of(existingPurchase));
+        when(purchaseRepository.findByIdForUpdate(purchaseId)).thenReturn(Optional.of(existingPurchase));
+        when(supplierRepository.findByIdForUpdate(testSupplier.getId())).thenReturn(Optional.of(testSupplier));
         when(purchaseRepository.save(any(Purchase.class))).thenAnswer(inv -> inv.getArgument(0));
 
         RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
@@ -310,7 +312,7 @@ class PurchaseServiceTest {
                 .build();
         existingPurchase.setId(purchaseId);
 
-        when(purchaseRepository.findById(purchaseId)).thenReturn(Optional.of(existingPurchase));
+        when(purchaseRepository.findByIdForUpdate(purchaseId)).thenReturn(Optional.of(existingPurchase));
 
         RecordPaymentRequest paymentRequest = RecordPaymentRequest.builder()
                 .amountPaid(new BigDecimal("250.00"))

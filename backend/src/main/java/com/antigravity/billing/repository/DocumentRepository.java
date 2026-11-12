@@ -18,7 +18,7 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
 
     @Query("SELECT d FROM Document d WHERE " +
            "(:entityType IS NULL OR d.entityType = :entityType) AND " +
-           "(:search IS NULL OR LOWER(d.fileName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(d.notes) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(:search IS NULL OR LOWER(d.fileName) LIKE :search OR LOWER(d.notes) LIKE :search)")
     Page<Document> findDocumentsWithFilter(
             @Param("entityType") String entityType,
             @Param("search") String search,

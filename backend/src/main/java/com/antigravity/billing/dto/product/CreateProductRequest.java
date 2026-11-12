@@ -19,8 +19,11 @@ public class CreateProductRequest {
     @Size(max = 200, message = "Product name must not exceed 200 characters")
     private String name;
 
+    @Size(max = 1000, message = "Description must not exceed 1000 characters")
     private String description;
     private UUID categoryId;
+
+    @Size(max = 100, message = "Brand must not exceed 100 characters")
     private String brand;
 
     @NotBlank(message = "HSN/SAC code is required")

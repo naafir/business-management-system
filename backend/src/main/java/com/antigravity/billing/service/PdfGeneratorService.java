@@ -51,19 +51,37 @@ public class PdfGeneratorService {
             // Business Cell (Left)
             PdfPCell busCell = new PdfPCell();
             busCell.setBorder(Rectangle.NO_BORDER);
-            String busName = (settings != null && settings.getLegalName() != null) ? settings.getLegalName() : "BUSINESS MANAGEMENT SYSTEM";
+
+            String busName = invoice.getSellerLegalName() != null ? invoice.getSellerLegalName()
+                    : ((settings != null && settings.getLegalName() != null) ? settings.getLegalName() : "BUSINESS MANAGEMENT SYSTEM");
             busCell.addElement(new Paragraph(busName, titleFont));
-            if (settings != null && settings.getTradeName() != null && !settings.getTradeName().isBlank()) {
-                busCell.addElement(new Paragraph("Trade Name: " + settings.getTradeName(), smallFont));
+
+            String tradeName = invoice.getSellerTradeName() != null ? invoice.getSellerTradeName()
+                    : (settings != null ? settings.getTradeName() : null);
+            if (tradeName != null && !tradeName.isBlank()) {
+                busCell.addElement(new Paragraph("Trade Name: " + tradeName, smallFont));
             }
-            if (settings != null && settings.getGstin() != null && !settings.getGstin().isBlank()) {
-                busCell.addElement(new Paragraph("GSTIN: " + settings.getGstin(), bodyBold));
+
+            String gstin = invoice.getSellerGstin() != null ? invoice.getSellerGstin()
+                    : (settings != null ? settings.getGstin() : null);
+            if (gstin != null && !gstin.isBlank()) {
+                busCell.addElement(new Paragraph("GSTIN: " + gstin, bodyBold));
             }
-            if (settings != null && settings.getAddressLine1() != null) {
-                busCell.addElement(new Paragraph(settings.getAddressLine1() + (settings.getCity() != null ? ", " + settings.getCity() : ""), smallFont));
+
+            String addr1 = invoice.getSellerAddressLine1() != null ? invoice.getSellerAddressLine1()
+                    : (settings != null ? settings.getAddressLine1() : null);
+            String city = invoice.getSellerCity() != null ? invoice.getSellerCity()
+                    : (settings != null ? settings.getCity() : null);
+            if (addr1 != null) {
+                busCell.addElement(new Paragraph(addr1 + (city != null ? ", " + city : ""), smallFont));
             }
-            if (settings != null && settings.getPhone() != null) {
-                busCell.addElement(new Paragraph("Phone: " + settings.getPhone() + " | Email: " + (settings.getEmail() != null ? settings.getEmail() : ""), smallFont));
+
+            String phone = invoice.getSellerPhone() != null ? invoice.getSellerPhone()
+                    : (settings != null ? settings.getPhone() : null);
+            String email = invoice.getSellerEmail() != null ? invoice.getSellerEmail()
+                    : (settings != null ? settings.getEmail() : null);
+            if (phone != null) {
+                busCell.addElement(new Paragraph("Phone: " + phone + " | Email: " + (email != null ? email : ""), smallFont));
             }
             headerTable.addCell(busCell);
 
@@ -124,12 +142,24 @@ public class PdfGeneratorService {
             bankCell.setBorderColor(borderGray);
             bankCell.setPadding(8);
             bankCell.addElement(new Paragraph("PAYMENT & BANK DETAILS:", bodyBold));
-            if (settings != null && settings.getBankName() != null) {
-                bankCell.addElement(new Paragraph("Bank: " + settings.getBankName(), bodyFont));
-                bankCell.addElement(new Paragraph("A/C No: " + settings.getBankAccountNumber(), bodyFont));
-                bankCell.addElement(new Paragraph("IFSC: " + settings.getBankIfsc() + " | Branch: " + (settings.getBankBranch() != null ? settings.getBankBranch() : ""), bodyFont));
-                if (settings.getBankUpiId() != null) {
-                    bankCell.addElement(new Paragraph("UPI ID: " + settings.getBankUpiId(), bodyFont));
+
+            String bankName = invoice.getSellerBankName() != null ? invoice.getSellerBankName()
+                    : (settings != null ? settings.getBankName() : null);
+            String bankAcc = invoice.getSellerBankAccountNumber() != null ? invoice.getSellerBankAccountNumber()
+                    : (settings != null ? settings.getBankAccountNumber() : null);
+            String bankIfsc = invoice.getSellerBankIfsc() != null ? invoice.getSellerBankIfsc()
+                    : (settings != null ? settings.getBankIfsc() : null);
+            String bankBranch = invoice.getSellerBankBranch() != null ? invoice.getSellerBankBranch()
+                    : (settings != null ? settings.getBankBranch() : null);
+            String bankUpi = invoice.getSellerBankUpiId() != null ? invoice.getSellerBankUpiId()
+                    : (settings != null ? settings.getBankUpiId() : null);
+
+            if (bankName != null) {
+                bankCell.addElement(new Paragraph("Bank: " + bankName, bodyFont));
+                bankCell.addElement(new Paragraph("A/C No: " + (bankAcc != null ? bankAcc : ""), bodyFont));
+                bankCell.addElement(new Paragraph("IFSC: " + (bankIfsc != null ? bankIfsc : "") + " | Branch: " + (bankBranch != null ? bankBranch : ""), bodyFont));
+                if (bankUpi != null) {
+                    bankCell.addElement(new Paragraph("UPI ID: " + bankUpi, bodyFont));
                 }
             } else {
                 bankCell.addElement(new Paragraph("Payment Method: " + (invoice.getPaymentMethod() != null ? invoice.getPaymentMethod() : "N/A"), bodyFont));

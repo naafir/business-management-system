@@ -148,7 +148,7 @@ class SupplierServiceTest {
         s.setId(UUID.randomUUID());
 
         Pageable pageable = PageRequest.of(0, 10);
-        when(supplierRepository.findSuppliersWithFilters(eq("Vendor"), eq(true), eq(pageable)))
+        when(supplierRepository.findSuppliersWithFilters(eq("%vendor%"), eq(true), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(s), pageable, 1));
 
         PageResponse<SupplierResponseDto> response = supplierService.listSuppliers("Vendor", true, pageable);

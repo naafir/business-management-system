@@ -50,8 +50,11 @@ public class InvoiceServiceImpl implements InvoiceService {
             LocalDate endDate,
             Pageable pageable
     ) {
+        String searchTerm = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%"
+                : null;
         Page<Invoice> page = invoiceRepository.searchInvoices(
-                search, customerId, status, paymentStatus, startDate, endDate, pageable
+                searchTerm, customerId, status, paymentStatus, startDate, endDate, pageable
         );
         List<InvoiceResponseDto> dtos = page.getContent().stream()
                 .map(this::mapToDto)
@@ -102,9 +105,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public InvoiceResponseDto createInvoice(CreateInvoiceRequest request, UUID userId, String username) {
-        BusinessSettings settings = businessSettingsRepository.findAll().stream().findFirst().orElse(null);
+        BusinessSettings settings = businessSettingsRepository.findFirstForUpdate().orElse(null);
         String businessStateCode = settings != null && settings.getStateCode() != null ? settings.getStateCode() : "27";
 
         String placeOfSupplyCode = request.getPlaceOfSupplyCode() != null ? request.getPlaceOfSupplyCode() : businessStateCode;
@@ -140,6 +143,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .createdBy(userId)
                 .createdByName(username)
                 .build();
+
+        snapshotSellerDetails(invoice, settings);
 
         List<GstCalculationRequest.GstLineItemInput> gstItems = new ArrayList<>();
         List<TempItemData> tempDataList = new ArrayList<>();
@@ -229,16 +234,16 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public InvoiceResponseDto createInvoiceFromSale(UUID saleId, UUID userId, String username) {
-        Sale sale = saleRepository.findById(saleId)
+        Sale sale = saleRepository.findByIdForUpdate(saleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sale", "id", saleId));
 
         invoiceRepository.findBySaleId(saleId).ifPresent(inv -> {
             throw new IllegalStateException("Invoice already exists for sale number: " + sale.getSaleNumber());
         });
 
-        BusinessSettings settings = businessSettingsRepository.findAll().stream().findFirst().orElse(null);
+        BusinessSettings settings = businessSettingsRepository.findFirstForUpdate().orElse(null);
         String invoiceNumber = generateNextInvoiceNumber(settings);
 
         Invoice invoice = Invoice.builder()
@@ -269,6 +274,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .createdBy(userId)
                 .createdByName(username)
                 .build();
+
+        snapshotSellerDetails(invoice, settings);
 
         if (sale.getItems() != null) {
             for (SaleItem sItem : sale.getItems()) {
@@ -301,18 +308,44 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public InvoiceResponseDto finalizeInvoice(UUID id) {
         Invoice invoice = invoiceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
+
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new com.antigravity.billing.exception.ApiException("Cannot finalize a cancelled invoice", org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
 
         if (invoice.getStatus() == InvoiceStatus.FINALIZED) {
             return mapToDto(invoice);
         }
 
+        if (invoice.getSellerLegalName() == null) {
+            BusinessSettings settings = businessSettingsRepository.findFirstForUpdate().orElse(null);
+            snapshotSellerDetails(invoice, settings);
+        }
+
         invoice.setStatus(InvoiceStatus.FINALIZED);
         Invoice updated = invoiceRepository.save(invoice);
         log.info("Finalized Invoice #{}", updated.getInvoiceNumber());
+
+        return mapToDto(updated);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public InvoiceResponseDto cancelInvoice(UUID id, UUID userId, String username) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
+
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            return mapToDto(invoice);
+        }
+
+        invoice.setStatus(InvoiceStatus.CANCELLED);
+        Invoice updated = invoiceRepository.save(invoice);
+        log.info("Cancelled Invoice #{} by {}", updated.getInvoiceNumber(), username);
 
         return mapToDto(updated);
     }
@@ -324,7 +357,10 @@ public class InvoiceServiceImpl implements InvoiceService {
         return pdfGeneratorService.generateInvoicePdf(invoiceDto);
     }
 
-    private synchronized String generateNextInvoiceNumber(BusinessSettings settings) {
+    private String generateNextInvoiceNumber(BusinessSettings settings) {
+        if (settings == null) {
+            settings = businessSettingsRepository.findFirstForUpdate().orElse(null);
+        }
         String prefix = settings != null && settings.getInvoicePrefix() != null ? settings.getInvoicePrefix() : "INV-";
         long nextSeq = settings != null ? settings.getInvoiceNextSeq() : 1;
 
@@ -335,6 +371,26 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         String yearStr = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy"));
         return String.format("%s%s-%05d", prefix, yearStr, nextSeq);
+    }
+
+    private void snapshotSellerDetails(Invoice invoice, BusinessSettings settings) {
+        if (settings == null) return;
+        invoice.setSellerLegalName(settings.getLegalName());
+        invoice.setSellerTradeName(settings.getTradeName());
+        invoice.setSellerGstin(settings.getGstin());
+        invoice.setSellerAddressLine1(settings.getAddressLine1());
+        invoice.setSellerAddressLine2(settings.getAddressLine2());
+        invoice.setSellerCity(settings.getCity());
+        invoice.setSellerStateName(settings.getStateName());
+        invoice.setSellerStateCode(settings.getStateCode());
+        invoice.setSellerPinCode(settings.getPinCode());
+        invoice.setSellerPhone(settings.getPhone());
+        invoice.setSellerEmail(settings.getEmail());
+        invoice.setSellerBankName(settings.getBankName());
+        invoice.setSellerBankAccountNumber(settings.getBankAccountNumber());
+        invoice.setSellerBankIfsc(settings.getBankIfsc());
+        invoice.setSellerBankBranch(settings.getBankBranch());
+        invoice.setSellerBankUpiId(settings.getBankUpiId());
     }
 
     private InvoiceResponseDto mapToDto(Invoice invoice) {
@@ -385,6 +441,22 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .paymentMethod(invoice.getPaymentMethod())
                 .notes(invoice.getNotes())
                 .termsAndConditions(invoice.getTermsAndConditions())
+                .sellerLegalName(invoice.getSellerLegalName())
+                .sellerTradeName(invoice.getSellerTradeName())
+                .sellerGstin(invoice.getSellerGstin())
+                .sellerAddressLine1(invoice.getSellerAddressLine1())
+                .sellerAddressLine2(invoice.getSellerAddressLine2())
+                .sellerCity(invoice.getSellerCity())
+                .sellerStateName(invoice.getSellerStateName())
+                .sellerStateCode(invoice.getSellerStateCode())
+                .sellerPinCode(invoice.getSellerPinCode())
+                .sellerPhone(invoice.getSellerPhone())
+                .sellerEmail(invoice.getSellerEmail())
+                .sellerBankName(invoice.getSellerBankName())
+                .sellerBankAccountNumber(invoice.getSellerBankAccountNumber())
+                .sellerBankIfsc(invoice.getSellerBankIfsc())
+                .sellerBankBranch(invoice.getSellerBankBranch())
+                .sellerBankUpiId(invoice.getSellerBankUpiId())
                 .createdByName(invoice.getCreatedByName())
                 .createdAt(invoice.getCreatedAt())
                 .updatedAt(invoice.getUpdatedAt())

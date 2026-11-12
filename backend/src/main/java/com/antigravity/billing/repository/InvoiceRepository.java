@@ -3,9 +3,11 @@ package com.antigravity.billing.repository;
 import com.antigravity.billing.entity.Invoice;
 import com.antigravity.billing.entity.InvoiceStatus;
 import com.antigravity.billing.entity.PaymentStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,12 +20,16 @@ import java.util.UUID;
 @Repository
 public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM Invoice i WHERE i.id = :id")
+    Optional<Invoice> findByIdForUpdate(@Param("id") UUID id);
+
     Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 
     Optional<Invoice> findBySaleId(UUID saleId);
 
     @Query("SELECT i FROM Invoice i WHERE " +
-           "(:search IS NULL OR LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(i.customerName) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+           "(:search IS NULL OR LOWER(i.invoiceNumber) LIKE :search OR LOWER(i.customerName) LIKE :search) AND " +
            "(:customerId IS NULL OR i.customerId = :customerId) AND " +
            "(:status IS NULL OR i.status = :status) AND " +
            "(:paymentStatus IS NULL OR i.paymentStatus = :paymentStatus) AND " +

@@ -21,5 +21,6 @@ public class ApiError {
     private String error;
     private String message;
     private String path;
+    private String requestId;
     private Map<String, String> fieldErrors;
 }

@@ -42,10 +42,10 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
 
     private Bucket getBucketForIp(String ip) {
         return bucketCache.get(ip, key -> {
-            Bandwidth limit = Bandwidth.classic(
-                    MAX_REQUESTS_PER_MINUTE,
-                    Refill.intervally(MAX_REQUESTS_PER_MINUTE, Duration.ofMinutes(1))
-            );
+            Bandwidth limit = Bandwidth.builder()
+                    .capacity(MAX_REQUESTS_PER_MINUTE)
+                    .refillIntervally(MAX_REQUESTS_PER_MINUTE, Duration.ofMinutes(1))
+                    .build();
             return Bucket.builder().addLimit(limit).build();
         });
     }

@@ -111,7 +111,9 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<CustomerResponseDto> listCustomers(String search, String customerType, Boolean activeOnly, Pageable pageable) {
-        String searchTerm = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchTerm = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%"
+                : null;
         Page<Customer> page = customerRepository.findCustomersWithFilters(searchTerm, customerType, activeOnly, pageable);
         return PageResponse.of(page.map(this::mapToDto));
     }

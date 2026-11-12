@@ -6,6 +6,7 @@ import com.antigravity.billing.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
 public class ReportController {
 
     private final ReportService reportService;
@@ -23,6 +25,7 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
+        validateDateRange(startDate, endDate);
         return ResponseEntity.ok(ApiResponse.ok(reportService.getGstOutputSummary(startDate, endDate)));
     }
 
@@ -31,6 +34,7 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
+        validateDateRange(startDate, endDate);
         return ResponseEntity.ok(ApiResponse.ok(reportService.getGstInputSummary(startDate, endDate)));
     }
 
@@ -39,6 +43,7 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
+        validateDateRange(startDate, endDate);
         return ResponseEntity.ok(ApiResponse.ok(reportService.getHsnSummary(startDate, endDate)));
     }
 
@@ -55,6 +60,14 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
+        validateDateRange(startDate, endDate);
         return ResponseEntity.ok(ApiResponse.ok(reportService.getProfitLoss(startDate, endDate)));
+    }
+
+    private void validateDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new com.antigravity.billing.exception.ApiException(
+                    "Start date cannot be after end date", org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
     }
 }

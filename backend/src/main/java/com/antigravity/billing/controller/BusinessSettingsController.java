@@ -9,11 +9,13 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/settings")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
 public class BusinessSettingsController {
 
     private final BusinessSettingsService settingsService;

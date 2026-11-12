@@ -15,11 +15,18 @@ import java.util.Date;
 @Component
 public class JwtTokenProvider {
 
-    @Value("${app.security.jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}")
+    @Value("${app.security.jwt.secret}")
     private String jwtSecret;
 
     @Value("${app.security.jwt.expiration-ms:86400000}")
     private long jwtExpirationMs;
+
+    @jakarta.annotation.PostConstruct
+    public void validateConfig() {
+        if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
+            throw new IllegalStateException("JWT secret (app.security.jwt.secret / JWT_SECRET) is not configured!");
+        }
+    }
 
     private SecretKey getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
@@ -66,6 +73,8 @@ public class JwtTokenProvider {
             log.error("Unsupported JWT token: {}", ex.getMessage());
         } catch (IllegalArgumentException ex) {
             log.error("JWT claims string is empty: {}", ex.getMessage());
+        } catch (JwtException ex) {
+            log.error("JWT token validation failed: {}", ex.getMessage());
         }
         return false;
     }

@@ -8,7 +8,10 @@ import com.antigravity.billing.dto.invoice.InvoiceSummaryDto;
 import com.antigravity.billing.entity.InvoiceStatus;
 import com.antigravity.billing.entity.PaymentStatus;
 import com.antigravity.billing.security.CustomUserDetails;
+import com.antigravity.billing.dto.payment.PaymentResponseDto;
+import com.antigravity.billing.dto.payment.RecordPaymentRequest;
 import com.antigravity.billing.service.InvoiceService;
+import com.antigravity.billing.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +26,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -31,6 +35,7 @@ import java.util.UUID;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+    private final PaymentService paymentService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<InvoiceResponseDto>>> listInvoices(
@@ -101,6 +106,15 @@ public class InvoiceController {
         return ResponseEntity.ok(ApiResponse.ok("Invoice finalized successfully", finalized));
     }
 
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> cancelInvoice(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        InvoiceResponseDto cancelled = invoiceService.cancelInvoice(id, userDetails.getId(), userDetails.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok("Invoice cancelled successfully", cancelled));
+    }
+
     @GetMapping("/{id}/pdf")
     public ResponseEntity<byte[]> downloadInvoicePdf(@PathVariable UUID id) {
         byte[] pdfBytes = invoiceService.downloadInvoicePdf(id);
@@ -112,5 +126,26 @@ public class InvoiceController {
         headers.setContentLength(pdfBytes.length);
 
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+    }
+
+    @PostMapping("/{id}/payments")
+    public ResponseEntity<ApiResponse<PaymentResponseDto>> recordPayment(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody RecordPaymentRequest request
+    ) {
+        PaymentResponseDto payment = paymentService.recordInvoicePayment(
+                id,
+                request,
+                userDetails.getId(),
+                userDetails.getUsername()
+        );
+        return new ResponseEntity<>(ApiResponse.ok("Payment recorded successfully", payment), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/{id}/payments")
+    public ResponseEntity<ApiResponse<List<PaymentResponseDto>>> getInvoicePayments(@PathVariable UUID id) {
+        List<PaymentResponseDto> payments = paymentService.getInvoicePayments(id);
+        return ResponseEntity.ok(ApiResponse.ok(payments));
     }
 }

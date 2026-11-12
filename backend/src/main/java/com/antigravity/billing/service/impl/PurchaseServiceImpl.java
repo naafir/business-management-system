@@ -41,21 +41,33 @@ public class PurchaseServiceImpl implements PurchaseService {
     private final AuditService auditService;
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public PurchaseResponseDto createPurchase(CreatePurchaseRequest request, UUID userId, String username) {
-        Supplier supplier = supplierRepository.findById(request.getSupplierId())
+        Supplier supplier = supplierRepository.findByIdForUpdate(request.getSupplierId())
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
 
         BusinessSettings settings = businessSettingsRepository.findAll().stream().findFirst().orElse(null);
         String businessStateCode = settings != null && settings.getStateCode() != null ? settings.getStateCode() : "27";
         String supplierStateCode = supplier.getStateCode() != null ? supplier.getStateCode() : businessStateCode;
 
-        List<GstCalculationRequest.GstLineItemInput> gstItems = new ArrayList<>();
+        // Deadlock prevention: Lock distinct products in deterministic ascending order of product ID
+        List<UUID> sortedProductIds = request.getItems().stream()
+                .map(PurchaseItemRequest::getProductId)
+                .distinct()
+                .sorted()
+                .toList();
+
         Map<UUID, Product> productMap = new LinkedHashMap<>();
+        for (UUID pid : sortedProductIds) {
+            Product product = productRepository.findByIdWithPessimisticLock(pid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", pid));
+            productMap.put(pid, product);
+        }
+
+        List<GstCalculationRequest.GstLineItemInput> gstItems = new ArrayList<>();
 
         for (PurchaseItemRequest itemReq : request.getItems()) {
-            Product product = productRepository.findByIdWithPessimisticLock(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
+            Product product = productMap.get(itemReq.getProductId());
 
             BigDecimal gstRatePercent = product.getGstRate() != null ? product.getGstRate().getRatePercent() : BigDecimal.ZERO;
             BigDecimal gross = itemReq.getQuantity().multiply(itemReq.getUnitPrice()).setScale(2, RoundingMode.HALF_UP);
@@ -69,8 +81,6 @@ public class PurchaseServiceImpl implements PurchaseService {
                     .discount(discountAmount)
                     .gstRatePercent(gstRatePercent)
                     .build());
-
-            productMap.put(itemReq.getProductId(), product);
         }
 
         GstCalculationResult gstResult = gstCalculationService.calculate(GstCalculationRequest.builder()
@@ -186,9 +196,10 @@ public class PurchaseServiceImpl implements PurchaseService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public PurchaseResponseDto recordPayment(UUID id, com.antigravity.billing.dto.payment.RecordPaymentRequest request, UUID userId, String username) {
-        Purchase purchase = purchaseRepository.findById(id)
+        // Lock Purchase row exclusively
+        Purchase purchase = purchaseRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase", "id", id));
 
         BigDecimal paymentAmount = request.getAmountPaid().setScale(2, RoundingMode.HALF_UP);
@@ -224,16 +235,18 @@ public class PurchaseServiceImpl implements PurchaseService {
 
         Purchase updatedPurchase = purchaseRepository.save(purchase);
 
-        // Update supplier outstanding balance
+        // Update supplier outstanding balance under pessimistic write lock
         if (purchase.getSupplier() != null) {
-            Supplier supplier = purchase.getSupplier();
-            BigDecimal supplierBal = supplier.getOutstandingBalance() != null ? supplier.getOutstandingBalance() : BigDecimal.ZERO;
-            BigDecimal newSupBal = supplierBal.subtract(paymentAmount);
-            if (newSupBal.compareTo(BigDecimal.ZERO) < 0) {
-                newSupBal = BigDecimal.ZERO;
+            Supplier supplier = supplierRepository.findByIdForUpdate(purchase.getSupplier().getId()).orElse(null);
+            if (supplier != null) {
+                BigDecimal supplierBal = supplier.getOutstandingBalance() != null ? supplier.getOutstandingBalance() : BigDecimal.ZERO;
+                BigDecimal newSupBal = supplierBal.subtract(paymentAmount);
+                if (newSupBal.compareTo(BigDecimal.ZERO) < 0) {
+                    newSupBal = BigDecimal.ZERO;
+                }
+                supplier.setOutstandingBalance(newSupBal);
+                supplierRepository.save(supplier);
             }
-            supplier.setOutstandingBalance(newSupBal);
-            supplierRepository.save(supplier);
         }
 
         auditService.logAction(
@@ -274,7 +287,9 @@ public class PurchaseServiceImpl implements PurchaseService {
             LocalDate endDate,
             Pageable pageable
     ) {
-        String searchTerm = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        String searchTerm = (search != null && !search.trim().isEmpty())
+                ? "%" + search.trim().toLowerCase() + "%"
+                : null;
         Page<Purchase> page = purchaseRepository.findPurchasesWithFilters(searchTerm, supplierId, status, startDate, endDate, pageable);
         return PageResponse.of(page.map(this::mapToDto));
     }
